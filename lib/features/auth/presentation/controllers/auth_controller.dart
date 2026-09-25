@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../domain/auth_repository.dart';
 import '../../domain/auth_session.dart';
+import '../../domain/password_recovery.dart';
 
 enum AuthStatus { checking, unauthenticated, authenticating, authenticated }
 
@@ -37,14 +38,17 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> login({required String email, required String password}) async {
+  Future<void> login({
+    required String identifier,
+    required String password,
+  }) async {
     _status = AuthStatus.authenticating;
     _errorMessage = null;
     notifyListeners();
 
     try {
       _session = await _repository.login(
-        email: email.trim(),
+        identifier: identifier.trim(),
         password: password,
       );
 
@@ -68,6 +72,20 @@ class AuthController extends ChangeNotifier {
     }
     notifyListeners();
   }
+
+  Future<PasswordRecoveryRequest> requestPasswordReset({
+    required String identifier,
+  }) => _repository.requestPasswordReset(identifier: identifier);
+
+  Future<void> resetPassword({
+    required String identifier,
+    required String code,
+    required String password,
+  }) => _repository.resetPassword(
+    identifier: identifier,
+    code: code,
+    password: password,
+  );
 
   Future<void> logout() async {
     _errorMessage = null;

@@ -61,6 +61,7 @@ class _ParentEnrollmentPageState extends State<ParentEnrollmentPage> {
           }
           if (_controller.requiresSignIn) {
             return _ExistingParentView(
+              channel: _controller.channel,
               onReturnToSignIn: () => Navigator.of(context).pop(),
             );
           }
@@ -73,6 +74,8 @@ class _ParentEnrollmentPageState extends State<ParentEnrollmentPage> {
               Text(
                 _controller.step == ParentEnrollmentStep.invitation
                     ? 'Connect your approved invitation'
+                    : _controller.channel == ParentInvitationChannel.sms
+                    ? 'Verify your mobile number'
                     : 'Verify your email',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.headlineSmall,
@@ -80,7 +83,9 @@ class _ParentEnrollmentPageState extends State<ParentEnrollmentPage> {
               const SizedBox(height: 8),
               Text(
                 _controller.step == ParentEnrollmentStep.invitation
-                    ? 'Enter the invitation token sent by the school. Each invitation connects one child.'
+                    ? 'Choose how you received the invitation, then enter the token sent by the school. Each invitation connects one child.'
+                    : _controller.channel == ParentInvitationChannel.sms
+                    ? 'Enter the six-digit code sent to the approved mobile number.'
                     : 'Enter the six-digit code sent to the approved email address.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: AppColors.muted, height: 1.45),
@@ -94,13 +99,16 @@ class _ParentEnrollmentPageState extends State<ParentEnrollmentPage> {
                     child: _controller.step == ParentEnrollmentStep.invitation
                         ? _InvitationForm(
                             tokenController: _tokenController,
+                            channel: _controller.channel,
                             isWorking: _controller.isWorking,
+                            onChannelChanged: _controller.selectChannel,
                             onSubmit: _requestCode,
                           )
                         : _VerificationForm(
                             codeController: _codeController,
                             nameController: _nameController,
                             passwordController: _passwordController,
+                            channel: _controller.channel,
                             existingParent: _controller.isExistingParent,
                             isWorking: _controller.isWorking,
                             obscurePassword: _obscurePassword,
@@ -108,7 +116,7 @@ class _ParentEnrollmentPageState extends State<ParentEnrollmentPage> {
                               () => _obscurePassword = !_obscurePassword,
                             ),
                             onSubmit: _accept,
-                            onStartOver: _controller.startOver,
+                            onStartOver: _startOver,
                           ),
                   ),
                 ),
@@ -139,6 +147,9 @@ class _ParentEnrollmentPageState extends State<ParentEnrollmentPage> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     final requested = await _controller.requestCode(_tokenController.text);
     if (!requested || !mounted) return;
+    _tokenController.clear();
+
+    final isSms = _controller.channel == ParentInvitationChannel.sms;
 
     Timer? autoDismissTimer;
     try {
@@ -153,11 +164,13 @@ class _ParentEnrollmentPageState extends State<ParentEnrollmentPage> {
           });
 
           return AlertDialog(
-            icon: const CircleAvatar(
+            icon: CircleAvatar(
               radius: 28,
-              backgroundColor: Color(0xFFE8F8EF),
+              backgroundColor: const Color(0xFFE8F8EF),
               child: Icon(
-                Icons.mark_email_read_outlined,
+                isSms
+                    ? Icons.mark_chat_read_outlined
+                    : Icons.mark_email_read_outlined,
                 color: AppColors.success,
                 size: 30,
               ),
@@ -166,8 +179,10 @@ class _ParentEnrollmentPageState extends State<ParentEnrollmentPage> {
               'Verification code sent',
               textAlign: TextAlign.center,
             ),
-            content: const Text(
-              'Open Gmail or your email inbox and enter the six-digit code sent to the approved address. Check Spam if it does not arrive.',
+            content: Text(
+              isSms
+                  ? 'Open your SMS messages and enter the six-digit code sent to the approved mobile number.'
+                  : 'Open Gmail or your email inbox and enter the six-digit code sent to the approved address. Check Spam if it does not arrive.',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppColors.muted, height: 1.45),
             ),
@@ -194,18 +209,34 @@ class _ParentEnrollmentPageState extends State<ParentEnrollmentPage> {
       name: _nameController.text,
       password: _passwordController.text,
     );
+    if (_controller.step == ParentEnrollmentStep.complete) {
+      _codeController.clear();
+      _passwordController.clear();
+    }
+  }
+
+  void _startOver() {
+    _tokenController.clear();
+    _codeController.clear();
+    _nameController.clear();
+    _passwordController.clear();
+    _controller.startOver();
   }
 }
 
 class _InvitationForm extends StatelessWidget {
   const _InvitationForm({
     required this.tokenController,
+    required this.channel,
     required this.isWorking,
+    required this.onChannelChanged,
     required this.onSubmit,
   });
 
   final TextEditingController tokenController;
+  final ParentInvitationChannel channel;
   final bool isWorking;
+  final ValueChanged<ParentInvitationChannel> onChannelChanged;
   final VoidCallback onSubmit;
 
   @override
@@ -213,6 +244,27 @@ class _InvitationForm extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        const Text('HOW DID YOU RECEIVE THE TOKEN?', style: _labelStyle),
+        const SizedBox(height: 8),
+        SegmentedButton<ParentInvitationChannel>(
+          segments: const [
+            ButtonSegment(
+              value: ParentInvitationChannel.email,
+              icon: Icon(Icons.email_outlined),
+              label: Text('Email'),
+            ),
+            ButtonSegment(
+              value: ParentInvitationChannel.sms,
+              icon: Icon(Icons.sms_outlined),
+              label: Text('SMS'),
+            ),
+          ],
+          selected: {channel},
+          onSelectionChanged: isWorking
+              ? null
+              : (selection) => onChannelChanged(selection.single),
+        ),
+        const SizedBox(height: 18),
         const Text('INVITATION TOKEN', style: _labelStyle),
         const SizedBox(height: 8),
         TextFormField(
@@ -222,9 +274,11 @@ class _InvitationForm extends StatelessWidget {
           enableSuggestions: false,
           textInputAction: TextInputAction.done,
           onFieldSubmitted: (_) => onSubmit(),
-          decoration: const InputDecoration(
-            hintText: 'Paste the token from the school email',
-            prefixIcon: Icon(Icons.key_outlined),
+          decoration: InputDecoration(
+            hintText: channel == ParentInvitationChannel.sms
+                ? 'Paste the token from the school SMS'
+                : 'Paste the token from the school email',
+            prefixIcon: const Icon(Icons.key_outlined),
           ),
           validator: (value) => value == null || value.trim().isEmpty
               ? 'Enter your invitation token.'
@@ -241,7 +295,11 @@ class _InvitationForm extends StatelessWidget {
                     color: Colors.white,
                   ),
                 )
-              : const Icon(Icons.mark_email_unread_outlined),
+              : Icon(
+                  channel == ParentInvitationChannel.sms
+                      ? Icons.sms_outlined
+                      : Icons.mark_email_unread_outlined,
+                ),
           label: const Text('Send verification code'),
         ),
       ],
@@ -254,6 +312,7 @@ class _VerificationForm extends StatelessWidget {
     required this.codeController,
     required this.nameController,
     required this.passwordController,
+    required this.channel,
     required this.existingParent,
     required this.isWorking,
     required this.obscurePassword,
@@ -265,6 +324,7 @@ class _VerificationForm extends StatelessWidget {
   final TextEditingController codeController;
   final TextEditingController nameController;
   final TextEditingController passwordController;
+  final ParentInvitationChannel channel;
   final bool existingParent;
   final bool isWorking;
   final bool obscurePassword;
@@ -277,6 +337,38 @@ class _VerificationForm extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Container(
+          padding: const EdgeInsets.all(13),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEAF1FB),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                channel == ParentInvitationChannel.sms
+                    ? Icons.phone_android_rounded
+                    : Icons.email_outlined,
+                color: AppColors.navy,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  channel == ParentInvitationChannel.sms
+                      ? 'The approved mobile number is locked to this invitation.'
+                      : 'The approved email address is locked to this invitation.',
+                  style: const TextStyle(
+                    color: AppColors.navy,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
         const Text('VERIFICATION CODE', style: _labelStyle),
         const SizedBox(height: 8),
         TextFormField(
@@ -416,9 +508,13 @@ class _CompleteView extends StatelessWidget {
 }
 
 class _ExistingParentView extends StatelessWidget {
-  const _ExistingParentView({required this.onReturnToSignIn});
+  const _ExistingParentView({
+    required this.onReturnToSignIn,
+    required this.channel,
+  });
 
   final VoidCallback onReturnToSignIn;
+  final ParentInvitationChannel channel;
 
   @override
   Widget build(BuildContext context) {
@@ -446,14 +542,14 @@ class _ExistingParentView extends StatelessWidget {
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 10),
-              const Text(
-                'The email approved for this invitation already belongs to a Parent account. Sign in to that account, then choose Add approved child and enter this invitation token again.',
+              Text(
+                'The ${channel == ParentInvitationChannel.sms ? 'mobile number' : 'email address'} approved for this invitation already belongs to a Parent account. Sign in to that account, then choose Add approved child and enter this invitation token again.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: AppColors.muted, height: 1.45),
               ),
               const SizedBox(height: 12),
-              const Text(
-                'If you do not recognize the account, ask the teacher to confirm the invited Parent email.',
+              Text(
+                'If you do not recognize the account, ask the teacher to confirm the invited Parent ${channel == ParentInvitationChannel.sms ? 'mobile number' : 'email address'}.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: AppColors.muted, height: 1.45),
               ),

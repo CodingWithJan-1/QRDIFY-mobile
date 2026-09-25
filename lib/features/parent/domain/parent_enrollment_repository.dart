@@ -1,3 +1,5 @@
+enum ParentInvitationChannel { email, sms }
+
 class ParentEnrollmentResult {
   const ParentEnrollmentResult({
     required this.parentUserId,

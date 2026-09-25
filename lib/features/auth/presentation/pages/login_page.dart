@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/presentation/school_brand.dart';
+import '../../domain/account_identifier.dart';
 import '../controllers/auth_controller.dart';
+import 'password_recovery_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({
@@ -20,13 +22,13 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
+  final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _identifierController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -36,7 +38,7 @@ class _LoginPageState extends State<LoginPage> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     await widget.controller.login(
-      email: _emailController.text,
+      identifier: _identifierController.text,
       password: _passwordController.text,
     );
   }
@@ -85,28 +87,19 @@ class _LoginPageState extends State<LoginPage> {
                               ),
                             ),
                             const SizedBox(height: 30),
-                            const _FieldLabel('Email Address'),
+                            const _FieldLabel('Email or Mobile Number'),
                             const SizedBox(height: 8),
                             TextFormField(
-                              controller: _emailController,
+                              controller: _identifierController,
                               enabled: !widget.controller.isAuthenticating,
                               keyboardType: TextInputType.emailAddress,
-                              autofillHints: const [AutofillHints.email],
+                              autofillHints: const [AutofillHints.username],
                               textInputAction: TextInputAction.next,
                               decoration: const InputDecoration(
-                                hintText: 'student@school.com',
-                                prefixIcon: Icon(Icons.mail_outline_rounded),
+                                hintText: 'name@email.com or 09XXXXXXXXX',
+                                prefixIcon: Icon(Icons.person_outline_rounded),
                               ),
-                              validator: (value) {
-                                final email = value?.trim() ?? '';
-                                if (email.isEmpty) {
-                                  return 'Enter your email address.';
-                                }
-                                if (!email.contains('@')) {
-                                  return 'Enter a valid email address.';
-                                }
-                                return null;
-                              },
+                              validator: validateAccountIdentifier,
                             ),
                             const SizedBox(height: 18),
                             const _FieldLabel('Password'),
@@ -143,6 +136,21 @@ class _LoginPageState extends State<LoginPage> {
                                 }
                                 return null;
                               },
+                            ),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: widget.controller.isAuthenticating
+                                    ? null
+                                    : () => Navigator.of(context).push(
+                                        MaterialPageRoute<void>(
+                                          builder: (_) => PasswordRecoveryPage(
+                                            controller: widget.controller,
+                                          ),
+                                        ),
+                                      ),
+                                child: const Text('Forgot password?'),
+                              ),
                             ),
                             if (widget.controller.errorMessage
                                 case final error?) ...[

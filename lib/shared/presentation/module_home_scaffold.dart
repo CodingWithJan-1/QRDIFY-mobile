@@ -7,6 +7,7 @@ class ModuleHomeScaffold extends StatelessWidget {
   const ModuleHomeScaffold({
     required this.title,
     required this.userName,
+    this.userIdentifier,
     required this.description,
     required this.onLogout,
     this.features = const [],
@@ -17,6 +18,7 @@ class ModuleHomeScaffold extends StatelessWidget {
 
   final String title;
   final String userName;
+  final String? userIdentifier;
   final String description;
   final List<ModuleFeature> features;
   final Future<void> Function() onLogout;
@@ -56,6 +58,17 @@ class ModuleHomeScaffold extends StatelessWidget {
               }
             },
             itemBuilder: (_) => [
+              if (userIdentifier case final identifier?
+                  when identifier.trim().isNotEmpty) ...[
+                PopupMenuItem<_HomeAction>(
+                  enabled: false,
+                  child: _AccountIdentity(
+                    name: userName,
+                    identifier: identifier,
+                  ),
+                ),
+                const PopupMenuDivider(),
+              ],
               if (onLocationPrivacy != null)
                 const PopupMenuItem(
                   value: _HomeAction.locationPrivacy,
@@ -130,6 +143,38 @@ class ModuleHomeScaffold extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+class _AccountIdentity extends StatelessWidget {
+  const _AccountIdentity({required this.name, required this.identifier});
+
+  final String name;
+  final String identifier;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: AppColors.ink,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          identifier,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: AppColors.muted, fontSize: 12),
+        ),
+      ],
     );
   }
 }

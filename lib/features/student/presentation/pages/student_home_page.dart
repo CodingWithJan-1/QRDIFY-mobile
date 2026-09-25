@@ -152,6 +152,7 @@ class _StudentHomePageState extends State<StudentHomePage>
     return ModuleHomeScaffold(
       title: 'Student',
       userName: widget.user.name,
+      userIdentifier: widget.user.displayIdentifier,
       description: 'View your attendance and school activity.',
       onLogout: widget.onLogout,
       onLocationPrivacy: () =>

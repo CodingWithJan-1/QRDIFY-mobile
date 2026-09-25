@@ -14,11 +14,19 @@ class ParentEnrollmentController extends ChangeNotifier {
   ParentEnrollmentStep step = ParentEnrollmentStep.invitation;
   bool isWorking = false;
   bool requiresSignIn = false;
+  ParentInvitationChannel channel = ParentInvitationChannel.email;
   String? errorMessage;
   String? _invitationToken;
   String? _verificationId;
 
   bool get isExistingParent => accessToken != null;
+
+  void selectChannel(ParentInvitationChannel value) {
+    if (isWorking || step != ParentEnrollmentStep.invitation) return;
+    channel = value;
+    errorMessage = null;
+    notifyListeners();
+  }
 
   Future<bool> requestCode(String invitationToken) async {
     if (isWorking) return false;
@@ -61,6 +69,8 @@ class ParentEnrollmentController extends ChangeNotifier {
         password: isExistingParent ? null : password,
         accessToken: accessToken,
       );
+      _invitationToken = null;
+      _verificationId = null;
       step = ParentEnrollmentStep.complete;
       return true;
     } on ApiException catch (error) {
@@ -85,11 +95,13 @@ class ParentEnrollmentController extends ChangeNotifier {
     errorMessage = null;
     _invitationToken = null;
     _verificationId = null;
+    channel = ParentInvitationChannel.email;
     notifyListeners();
   }
 
   String _message(Object error) => switch (error) {
-    ApiException exception when exception.code == 'state_conflict' => 'The invited email is already used by another QRDify account or requires school review. Ask the teacher to verify the Parent email and issue a new invitation.',
+    ApiException exception when exception.code == 'state_conflict' =>
+      'The invited ${channel == ParentInvitationChannel.sms ? 'mobile number' : 'email address'} is already used by another QRDify account or requires school review. Ask the teacher to confirm it and issue a new invitation.',
     ApiException exception => exception.message,
     FormatException _ => 'QRDify returned an unknown enrollment response.',
     _ => 'Unable to continue Parent enrollment. Please try again.',

@@ -6,6 +6,7 @@ import 'package:qrdify/core/network/api_exception.dart';
 import 'package:qrdify/features/auth/domain/auth_repository.dart';
 import 'package:qrdify/features/auth/domain/auth_session.dart';
 import 'package:qrdify/features/auth/domain/auth_user.dart';
+import 'package:qrdify/features/auth/domain/password_recovery.dart';
 import 'package:qrdify/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:qrdify/features/notifications/domain/app_notification.dart';
 import 'package:qrdify/features/notifications/domain/notification_repository.dart';
@@ -42,9 +43,11 @@ void main() {
       'student@example.test',
     );
     await tester.enterText(find.byType(TextFormField).at(1), 'password123');
+    await tester.ensureVisible(find.text('Sign in'));
     await tester.tap(find.text('Sign in'));
     await tester.pumpAndSettle();
 
+    expect(repository.lastLoginIdentifier, 'student@example.test');
     expect(find.textContaining('Welcome, Sample Student.'), findsOneWidget);
     expect(find.text('Campus location'), findsNothing);
     expect(find.text('DAYS PRESENT'), findsOneWidget);
@@ -180,6 +183,54 @@ void main() {
     expect(find.text('Verify your email'), findsOneWidget);
   });
 
+  testWidgets('uses SMS guidance for an SMS Parent invitation', (tester) async {
+    final controller = AuthController(_FakeAuthRepository());
+    await tester.pumpWidget(QrdifyApp(dependencies: _dependencies(controller)));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Use a Parent invitation'));
+    await tester.tap(find.text('Use a Parent invitation'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('SMS'));
+    await tester.pump();
+    await tester.enterText(find.byType(TextFormField), 'sms-invitation-token');
+    await tester.tap(find.text('Send verification code'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.textContaining('Open your SMS messages'), findsOneWidget);
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+    expect(find.text('Verify your mobile number'), findsOneWidget);
+    expect(
+      find.text('The approved mobile number is locked to this invitation.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('resets a password using a mobile identifier', (tester) async {
+    final repository = _FakeAuthRepository();
+    final controller = AuthController(repository);
+    await tester.pumpWidget(QrdifyApp(dependencies: _dependencies(controller)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Forgot password?'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField), '09387671972');
+    await tester.tap(find.text('Send reset code'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Enter your reset code'), findsOneWidget);
+    await tester.enterText(find.byType(TextFormField).at(0), '123456');
+    await tester.enterText(find.byType(TextFormField).at(1), 'new-password');
+    await tester.enterText(find.byType(TextFormField).at(2), 'new-password');
+    await tester.tap(find.text('Update password'));
+    await tester.pumpAndSettle();
+
+    expect(repository.lastResetIdentifier, '09387671972');
+    expect(find.text('Password updated'), findsOneWidget);
+  });
+
   testWidgets('directs an existing invited Parent to sign in', (tester) async {
     final controller = AuthController(_FakeAuthRepository());
     final enrollmentRepository = _FakeParentEnrollmentRepository(
@@ -270,16 +321,39 @@ class _FakeAuthRepository implements AuthRepository {
 
   final AuthSession? restoredSession;
   final AuthSession? loginSession;
+  String? lastLoginIdentifier;
+  String? lastResetIdentifier;
 
   @override
   Future<AuthSession?> restoreSession() async => restoredSession;
 
   @override
   Future<AuthSession> login({
-    required String email,
+    required String identifier,
     required String password,
   }) async {
+    lastLoginIdentifier = identifier;
     return loginSession!;
+  }
+
+  @override
+  Future<PasswordRecoveryRequest> requestPasswordReset({
+    required String identifier,
+  }) async {
+    return const PasswordRecoveryRequest(
+      message: 'If that account exists, a reset code has been sent.',
+      expiresIn: Duration(minutes: 5),
+      resendIn: Duration.zero,
+    );
+  }
+
+  @override
+  Future<void> resetPassword({
+    required String identifier,
+    required String code,
+    required String password,
+  }) async {
+    lastResetIdentifier = identifier;
   }
 
   @override

@@ -5,6 +5,7 @@ class AuthUser {
     required this.id,
     required this.name,
     required this.email,
+    this.phone = '',
     required this.roles,
     required this.needsPasswordChange,
   });
@@ -19,6 +20,7 @@ class AuthUser {
       id: (json['id'] as num).toInt(),
       name: json['name'] as String? ?? '',
       email: json['email'] as String? ?? '',
+      phone: json['phone'] as String? ?? json['phone_e164'] as String? ?? '',
       roles: roles,
       needsPasswordChange: json['needs_password_change'] as bool? ?? false,
     );
@@ -27,8 +29,11 @@ class AuthUser {
   final int id;
   final String name;
   final String email;
+  final String phone;
   final List<String> roles;
   final bool needsPasswordChange;
+
+  String get displayIdentifier => email.trim().isNotEmpty ? email : phone;
 
   PortalRole? get portalRole {
     if (roles.contains('student')) return PortalRole.student;

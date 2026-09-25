@@ -3,6 +3,7 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/storage/session_store.dart';
 import '../domain/auth_repository.dart';
 import '../domain/auth_session.dart';
+import '../domain/password_recovery.dart';
 import 'auth_remote_data_source.dart';
 
 class AuthRepositoryImpl implements AuthRepository {
@@ -38,12 +39,12 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<AuthSession> login({
-    required String email,
+    required String identifier,
     required String password,
   }) async {
     final installationId = await _sessionStore.getOrCreateInstallationId();
     final session = await _remoteDataSource.login(
-      email: email,
+      identifier: identifier,
       password: password,
       installationId: installationId,
     );
@@ -52,6 +53,22 @@ class AuthRepositoryImpl implements AuthRepository {
     _accessToken = session.accessToken;
     return session;
   }
+
+  @override
+  Future<PasswordRecoveryRequest> requestPasswordReset({
+    required String identifier,
+  }) => _remoteDataSource.requestPasswordReset(identifier: identifier.trim());
+
+  @override
+  Future<void> resetPassword({
+    required String identifier,
+    required String code,
+    required String password,
+  }) => _remoteDataSource.resetPassword(
+    identifier: identifier.trim(),
+    code: code.trim(),
+    password: password,
+  );
 
   @override
   Future<void> logout() async {

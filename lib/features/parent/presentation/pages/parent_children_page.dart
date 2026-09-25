@@ -52,8 +52,18 @@ class ParentChildrenPage extends StatelessWidget {
             onSelected: (action) {
               if (action == _ParentAction.logout) onLogout();
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(
+            itemBuilder: (_) => [
+              if (user.displayIdentifier.trim().isNotEmpty) ...[
+                PopupMenuItem<_ParentAction>(
+                  enabled: false,
+                  child: _ParentIdentity(
+                    name: user.name,
+                    identifier: user.displayIdentifier,
+                  ),
+                ),
+                const PopupMenuDivider(),
+              ],
+              const PopupMenuItem(
                 value: _ParentAction.logout,
                 child: Row(
                   children: [
@@ -384,3 +394,35 @@ class _EmptyChildren extends StatelessWidget {
 }
 
 enum _ParentAction { logout }
+
+class _ParentIdentity extends StatelessWidget {
+  const _ParentIdentity({required this.name, required this.identifier});
+
+  final String name;
+  final String identifier;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: ParentDesign.deepInk,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          identifier,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: AppColors.muted, fontSize: 12),
+        ),
+      ],
+    );
+  }
+}
