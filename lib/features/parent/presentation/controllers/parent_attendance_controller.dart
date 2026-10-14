@@ -1,10 +1,10 @@
-import 'package:flutter/foundation.dart';
+import '../../../../core/state/safe_change_notifier.dart';
 
 import '../../../../core/network/api_exception.dart';
 import '../../domain/parent_attendance.dart';
 import '../../domain/parent_repository.dart';
 
-class ParentAttendanceController extends ChangeNotifier {
+class ParentAttendanceController extends SafeChangeNotifier {
   ParentAttendanceController(
     this._repository,
     this._accessToken, {

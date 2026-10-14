@@ -50,11 +50,15 @@ class StudentLocationController extends ChangeNotifier {
   DateTime? _lastReportedAt;
   String? _errorMessage;
   Timer? _reportTimer;
+  Timer? _confirmationTimer;
   bool _sessionEnabled = false;
   bool _appInForeground = true;
   bool _isReporting = false;
   bool _isConsentLoading = false;
   int _generation = 0;
+  bool _disposed = false;
+  bool _stopping = false;
+  Future<StudentLocationConsent>? _pendingConsentEnable;
 
   StudentLocationStatus get status => _status;
   DeviceLocation? get latestLocation => _latestLocation;
@@ -74,7 +78,9 @@ class StudentLocationController extends ChangeNotifier {
     _isConsentLoading = true;
     notifyListeners();
     try {
-      _consent = await _repository.fetchConsent(accessToken: _accessToken);
+      final consent = await _repository.fetchConsent(accessToken: _accessToken);
+      if (_disposed) return;
+      _consent = consent;
     } on ApiException catch (error) {
       _errorMessage = error.message;
     } on FormatException {
@@ -83,33 +89,61 @@ class StudentLocationController extends ChangeNotifier {
       _errorMessage = 'Unable to check location consent.';
     } finally {
       _isConsentLoading = false;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     }
   }
 
   Future<void> start() async {
-    if (_status == StudentLocationStatus.checking || isTracking) return;
+    if (_disposed ||
+        _stopping ||
+        _status == StudentLocationStatus.checking ||
+        isTracking) {
+      return;
+    }
     _sessionEnabled = true;
     _appInForeground = true;
     await _begin(requestPermission: true);
   }
 
   Future<void> stop() async {
+    if (_disposed || _stopping) return;
+    _stopping = true;
     _sessionEnabled = false;
     _generation++;
     _cancelTimer();
-    await _locationService.stopBackgroundTracking();
+    try {
+      await _locationService.stopBackgroundTracking();
+    } on Object {
+      _stopping = false;
+      _status = StudentLocationStatus.failed;
+      _errorMessage = 'Unable to stop the phone location provider. Close QRDify and check phone location settings.';
+      if (!_disposed) notifyListeners();
+      return;
+    }
+    if (_disposed) return;
     _status = StudentLocationStatus.idle;
     _errorMessage = null;
     notifyListeners();
-    final consent = _consent;
-    if (consent == null || !consent.enabled) return;
+    var consent = _consent;
+    final pending = _pendingConsentEnable;
+    if (pending != null) {
+      try {
+        consent = await pending;
+      } on Object {
+        /* Still attempt withdrawal after an uncertain enable response. */
+      }
+    }
+    if (consent == null || (!consent.enabled && pending == null)) {
+      _stopping = false;
+      return;
+    }
     try {
-      _consent = await _repository.updateConsent(
+      final withdrawn = await _repository.updateConsent(
         accessToken: _accessToken,
         enabled: false,
         policyVersion: consent.policyVersion,
       );
+      if (!_disposed) _consent = withdrawn;
     } on ApiException catch (error) {
       _errorMessage =
           'Sharing stopped on this phone, but server consent could not be '
@@ -119,7 +153,9 @@ class StudentLocationController extends ChangeNotifier {
           'Sharing stopped on this phone, but server consent could not be '
           'disabled. Connect to the internet and try again.';
     }
-    notifyListeners();
+    _stopping = false;
+    _pendingConsentEnable = null;
+    if (!_disposed) notifyListeners();
   }
 
   Future<void> pauseForBackground() async {
@@ -180,31 +216,51 @@ class StudentLocationController extends ChangeNotifier {
         return;
       }
 
-      var consent = _consent;
-      consent ??= await _repository.fetchConsent(accessToken: _accessToken);
+      var consent = await _repository.fetchConsent(accessToken: _accessToken);
+      if (!_isCurrent(generation)) return;
+      _consent = consent;
       if (!consent.enabled) {
-        consent = await _repository.updateConsent(
+        if (!requestPermission) {
+          await _stopForAuthorization(
+            const ApiException(
+              message: 'Location sharing is disabled. Enable it to continue.',
+            ),
+          );
+          return;
+        }
+        _pendingConsentEnable = _repository.updateConsent(
           accessToken: _accessToken,
           enabled: true,
           policyVersion: consent.policyVersion,
         );
+        consent = await _pendingConsentEnable!;
+        if (!_isCurrent(generation)) return;
+        _pendingConsentEnable = null;
       }
-      _consent = consent;
       if (!_isCurrent(generation)) return;
+      _consent = consent;
 
       _status = StudentLocationStatus.tracking;
       await _locationService.startBackgroundTracking(reportInterval);
+      if (!_isCurrent(generation)) {
+        await _locationService.stopBackgroundTracking();
+        return;
+      }
       _reportTimer = Timer.periodic(
         reportInterval,
         (_) => unawaited(_captureAndEvaluate(generation)),
       );
       notifyListeners();
       await _captureAndEvaluate(generation);
-    } on Object {
+    } on Object catch (error) {
       if (!_isCurrent(generation)) return;
       _sessionEnabled = false;
       _status = StudentLocationStatus.failed;
-      _errorMessage = 'Unable to start location tracking. Please try again.';
+      await _locationService.stopBackgroundTracking();
+      if (_disposed) return;
+      _errorMessage = error is ApiException
+          ? error.message
+          : 'Unable to start location tracking. Please try again.';
       notifyListeners();
     }
   }
@@ -216,7 +272,40 @@ class StudentLocationController extends ChangeNotifier {
 
     _isReporting = true;
     notifyListeners();
+    var failureStage = 'acquiring a device location';
     try {
+      final consent = await _repository.fetchConsent(accessToken: _accessToken);
+      if (!_isCurrent(generation)) return;
+      _consent = consent;
+      if (!consent.enabled) {
+        await _stopForAuthorization(
+          const ApiException(
+            message: 'Location consent was withdrawn. Sharing stopped.',
+          ),
+        );
+        return;
+      }
+      if (!_serverEvaluatesLocation) {
+        try {
+          failureStage = 'loading the geofence policy';
+          await _refreshPolicyIfNeeded();
+        } on ApiException catch (error) {
+          if (error.statusCode != 404) rethrow;
+          _serverEvaluatesLocation = true;
+        }
+      }
+      if (!_isCurrent(generation)) return;
+      final policy = _policy;
+      if (!_serverEvaluatesLocation &&
+          (policy == null || !policy.enabled || !policy.trackingWindowActive)) {
+        _confirmationTimer?.cancel();
+        _confirmationTimer = null;
+        _boundaryState = BoundaryState.unknown;
+        _candidateSamples.clear();
+        _candidateState = null;
+        _errorMessage = null;
+        return;
+      }
       final location = await _locationService.getCurrentLocation();
       if (!_isCurrent(generation)) return;
       _latestLocation = location;
@@ -230,41 +319,33 @@ class StudentLocationController extends ChangeNotifier {
       );
 
       if (_serverEvaluatesLocation) {
+        failureStage = 'uploading a location sample';
         await _uploadForServerEvaluation(sample);
         return;
       }
 
-      try {
-        await _refreshPolicyIfNeeded();
-      } on ApiException catch (error) {
-        if (error.statusCode != 404) rethrow;
-        _serverEvaluatesLocation = true;
-        await _uploadForServerEvaluation(sample);
-        return;
-      }
-      if (!_isCurrent(generation)) return;
-      final policy = _policy;
-      if (policy == null || !policy.enabled || !policy.trackingWindowActive) {
-        _boundaryState = BoundaryState.unknown;
-        _candidateSamples.clear();
-        _candidateState = null;
-        _errorMessage = null;
-        return;
-      }
+      if (policy == null) return;
       if (location.accuracyMeters > policy.maxAccuracyMeters) {
         _errorMessage =
             'Location accuracy is too weak. QRDify will check again.';
+        _scheduleConfirmationSample(
+          generation,
+          policy.confirmationSampleInterval,
+        );
         return;
       }
 
+      failureStage = 'evaluating the campus boundary';
       final state = policy.classify(location);
       _boundaryState = state;
       _addCandidate(state, sample, policy.confirmationWindow);
 
       if (state == BoundaryState.outside) {
         if (_serverBreachActive) {
+          failureStage = 'uploading a location sample';
           await _uploadSamples([sample]);
         } else if (_candidateSamples.length >= policy.outsideConfirmations) {
+          failureStage = 'uploading location samples';
           await _uploadSamples(
             _candidateSamples
                 .skip(_candidateSamples.length - policy.outsideConfirmations)
@@ -274,6 +355,7 @@ class StudentLocationController extends ChangeNotifier {
       } else if (state == BoundaryState.inside &&
           _serverBreachActive &&
           _candidateSamples.length >= policy.insideConfirmations) {
+        failureStage = 'uploading location samples';
         await _uploadSamples(
           _candidateSamples
               .skip(_candidateSamples.length - policy.insideConfirmations)
@@ -281,15 +363,52 @@ class StudentLocationController extends ChangeNotifier {
         );
       }
 
+      final confirmationCount =
+          policy.outsideConfirmations > policy.insideConfirmations
+          ? policy.outsideConfirmations
+          : policy.insideConfirmations;
+      final needsExitConfirmation =
+          state == BoundaryState.outside &&
+          !_serverBreachActive &&
+          _candidateSamples.length < policy.outsideConfirmations;
+      final needsReentryConfirmation =
+          state == BoundaryState.inside &&
+          _serverBreachActive &&
+          _candidateSamples.length < policy.insideConfirmations;
+      final needsBoundaryRecheck =
+          state == BoundaryState.nearBoundary &&
+          _candidateSamples.length < confirmationCount;
+      if (needsExitConfirmation ||
+          needsReentryConfirmation ||
+          needsBoundaryRecheck) {
+        _scheduleConfirmationSample(
+          generation,
+          policy.confirmationSampleInterval,
+        );
+      }
+
       _errorMessage = null;
     } on ApiException catch (error) {
       if (!_isCurrent(generation)) return;
+      if (error.isUnauthorized ||
+          error.statusCode == 403 ||
+          error.code == 'tracking_notification_required') {
+        await _stopForAuthorization(error);
+        return;
+      }
       _errorMessage = error.message;
     } on FormatException {
       if (!_isCurrent(generation)) return;
       _errorMessage = 'QRDify returned an invalid location response.';
-    } on Object {
+    } on Object catch (error, stackTrace) {
       if (!_isCurrent(generation)) return;
+      if (kDebugMode) {
+        debugPrint(
+          'Student location check failed while $failureStage '
+          '(${error.runtimeType}): $error',
+        );
+        debugPrintStack(stackTrace: stackTrace);
+      }
       _errorMessage =
           'Unable to get or report location. QRDify will try again.';
     } finally {
@@ -326,6 +445,14 @@ class StudentLocationController extends ChangeNotifier {
     _serverBreachActive = policy.activeBreach;
   }
 
+  void _scheduleConfirmationSample(int generation, Duration interval) {
+    if (_confirmationTimer != null) return;
+    _confirmationTimer = Timer(interval, () {
+      _confirmationTimer = null;
+      unawaited(_captureAndEvaluate(generation));
+    });
+  }
+
   void _addCandidate(
     BoundaryState state,
     StudentLocationSample sample,
@@ -344,11 +471,14 @@ class StudentLocationController extends ChangeNotifier {
   }
 
   Future<void> _uploadSamples(List<StudentLocationSample> samples) async {
+    final generation = _generation;
     for (final sample in samples) {
+      if (!_isCurrent(generation)) return;
       final report = await _repository.reportLocation(
         accessToken: _accessToken,
         sample: sample,
       );
+      if (!_isCurrent(generation)) return;
       _latestReport = report;
       _lastReportedAt = DateTime.now();
       _serverBreachActive =
@@ -358,24 +488,64 @@ class StudentLocationController extends ChangeNotifier {
         throw const FormatException('The server rejected the location sample.');
       }
     }
+    _confirmationTimer?.cancel();
+    _confirmationTimer = null;
     _candidateSamples.clear();
     _candidateState = null;
   }
 
   bool _isCurrent(int generation) =>
-      generation == _generation && _sessionEnabled && _appInForeground;
+      !_disposed &&
+      generation == _generation &&
+      _sessionEnabled &&
+      _appInForeground;
+
+  Future<void> _stopForAuthorization(ApiException error) async {
+    _generation++;
+    _sessionEnabled = false;
+    _cancelTimer();
+    _latestLocation = null;
+    _latestReport = null;
+    _candidateSamples.clear();
+    _status = StudentLocationStatus.failed;
+    _errorMessage = error.message;
+    await _locationService.stopBackgroundTracking();
+    if (!_disposed) notifyListeners();
+  }
 
   void _cancelTimer() {
     _reportTimer?.cancel();
     _reportTimer = null;
+    _confirmationTimer?.cancel();
+    _confirmationTimer = null;
     _isReporting = false;
   }
 
   @override
   void dispose() {
+    _disposed = true;
+    _sessionEnabled = false;
     _generation++;
     _reportTimer?.cancel();
+    _confirmationTimer?.cancel();
     unawaited(_locationService.stopBackgroundTracking());
+    final pending = _pendingConsentEnable;
+    if (pending != null) unawaited(_withdrawPendingConsent(pending));
     super.dispose();
+  }
+
+  Future<void> _withdrawPendingConsent(
+    Future<StudentLocationConsent> pending,
+  ) async {
+    try {
+      final consent = await pending;
+      await _repository.updateConsent(
+        accessToken: _accessToken,
+        enabled: false,
+        policyVersion: consent.policyVersion,
+      );
+    } on Object {
+      // No local tracking survives disposal. Remote withdrawal may need a retry.
+    }
   }
 }

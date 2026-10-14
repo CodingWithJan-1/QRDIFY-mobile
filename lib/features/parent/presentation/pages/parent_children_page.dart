@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/presentation/school_brand.dart';
+import '../../../../shared/presentation/user_profile_avatar.dart';
 import '../../../auth/domain/auth_user.dart';
 import '../../domain/parent_child.dart';
 import '../controllers/parent_home_controller.dart';
@@ -15,6 +16,7 @@ class ParentChildrenPage extends StatelessWidget {
     required this.onChildSelected,
     required this.onAddChild,
     required this.onLogout,
+    required this.onProfile,
     super.key,
   });
 
@@ -23,6 +25,7 @@ class ParentChildrenPage extends StatelessWidget {
   final ValueChanged<ParentChild> onChildSelected;
   final VoidCallback onAddChild;
   final Future<void> Function() onLogout;
+  final VoidCallback onProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -51,6 +54,7 @@ class ParentChildrenPage extends StatelessWidget {
             tooltip: 'Account menu',
             onSelected: (action) {
               if (action == _ParentAction.logout) onLogout();
+              if (action == _ParentAction.profile) onProfile();
             },
             itemBuilder: (_) => [
               if (user.displayIdentifier.trim().isNotEmpty) ...[
@@ -64,6 +68,16 @@ class ParentChildrenPage extends StatelessWidget {
                 const PopupMenuDivider(),
               ],
               const PopupMenuItem(
+                value: _ParentAction.profile,
+                child: Row(
+                  children: [
+                    Icon(Icons.account_circle_outlined, color: AppColors.ink),
+                    SizedBox(width: 10),
+                    Text('My profile'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
                 value: _ParentAction.logout,
                 child: Row(
                   children: [
@@ -76,17 +90,12 @@ class ParentChildrenPage extends StatelessWidget {
             ],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 18),
-              child: CircleAvatar(
+              child: UserProfileAvatar(
+                name: user.name,
+                photoUrl: user.photoUrl,
                 radius: 20,
                 backgroundColor: Colors.white24,
-                child: Text(
-                  initials(user.name),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
+                foregroundColor: Colors.white,
               ),
             ),
           ),
@@ -393,7 +402,7 @@ class _EmptyChildren extends StatelessWidget {
   }
 }
 
-enum _ParentAction { logout }
+enum _ParentAction { profile, logout }
 
 class _ParentIdentity extends StatelessWidget {
   const _ParentIdentity({required this.name, required this.identifier});

@@ -15,11 +15,15 @@ class ParentPageHeader extends StatelessWidget implements PreferredSizeWidget {
   const ParentPageHeader({
     required this.title,
     this.actions = const [],
+    this.child,
+    this.onChangeChild,
     super.key,
   });
 
   final String title;
   final List<Widget> actions;
+  final ParentChild? child;
+  final VoidCallback? onChangeChild;
 
   @override
   Size get preferredSize => const Size.fromHeight(82);
@@ -29,16 +33,51 @@ class ParentPageHeader extends StatelessWidget implements PreferredSizeWidget {
     return AppBar(
       toolbarHeight: preferredSize.height,
       titleSpacing: 20,
-      title: Text(
-        title,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 24,
-          fontWeight: FontWeight.w800,
-          letterSpacing: -0.5,
-        ),
-      ),
-      actions: actions,
+      title: child == null
+          ? Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+              ),
+            )
+          : Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.4,
+                  ),
+                ),
+                Text(
+                  parentDisplayName(child!.name),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xD9FFFFFF),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+      actions: [
+        ...actions,
+        if (child != null && onChangeChild != null)
+          TextButton.icon(
+            onPressed: onChangeChild,
+            icon: const Icon(Icons.swap_horiz_rounded, size: 19),
+            label: const Text('Change'),
+            style: TextButton.styleFrom(foregroundColor: Colors.white),
+          ),
+      ],
     );
   }
 }

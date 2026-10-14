@@ -6,6 +6,7 @@ class AuthUser {
     required this.name,
     required this.email,
     this.phone = '',
+    this.photoUrl,
     required this.roles,
     required this.needsPasswordChange,
   });
@@ -21,6 +22,7 @@ class AuthUser {
       name: json['name'] as String? ?? '',
       email: json['email'] as String? ?? '',
       phone: json['phone'] as String? ?? json['phone_e164'] as String? ?? '',
+      photoUrl: json['photo_url'] as String?,
       roles: roles,
       needsPasswordChange: json['needs_password_change'] as bool? ?? false,
     );
@@ -30,6 +32,7 @@ class AuthUser {
   final String name;
   final String email;
   final String phone;
+  final String? photoUrl;
   final List<String> roles;
   final bool needsPasswordChange;
 

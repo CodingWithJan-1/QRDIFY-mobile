@@ -1,18 +1,16 @@
-import 'package:flutter/foundation.dart';
+import '../../../../core/state/safe_change_notifier.dart';
 
 import '../../../../core/network/api_exception.dart';
 import '../../domain/excuse_letter.dart';
 import '../../domain/excuse_letter_repository.dart';
-import '../../domain/excuse_teacher.dart';
 
-class ExcuseLetterController extends ChangeNotifier {
+class ExcuseLetterController extends SafeChangeNotifier {
   ExcuseLetterController(this._repository, this._accessToken);
 
   final ExcuseLetterRepository _repository;
   final String _accessToken;
 
   List<ExcuseLetter> letters = const [];
-  List<ExcuseTeacher> teachers = const [];
   bool isLoading = false;
   bool isSubmitting = false;
   int? deletingLetterId;
@@ -25,12 +23,7 @@ class ExcuseLetterController extends ChangeNotifier {
     errorMessage = null;
     notifyListeners();
     try {
-      final results = await Future.wait([
-        _repository.fetchLetters(accessToken: _accessToken),
-        _repository.fetchTeachers(accessToken: _accessToken),
-      ]);
-      letters = results[0] as List<ExcuseLetter>;
-      teachers = results[1] as List<ExcuseTeacher>;
+      letters = await _repository.fetchLetters(accessToken: _accessToken);
     } catch (error) {
       errorMessage = switch (error) {
         ApiException exception => exception.message,
@@ -77,6 +70,12 @@ class ExcuseLetterController extends ChangeNotifier {
   }
 
   Future<bool> delete(ExcuseLetter letter) async {
+    if (letter.status != 'pending') {
+      actionError =
+          'Reviewed excuse letters cannot be deleted. Contact your teacher.';
+      notifyListeners();
+      return false;
+    }
     if (deletingLetterId != null) return false;
     deletingLetterId = letter.id;
     actionError = null;

@@ -44,15 +44,16 @@ flutter run --dart-define=API_BASE_URL=https://school.example/api
 ```
 
 Debug builds default to `http://10.0.2.2:8000/api`. Release builds default to
-`https://qridify.online/api`. Use the computer's reachable LAN address for a
+`https://api.devourasolutions.com/api`. Use the computer's reachable LAN address for a
 physical device running a local backend.
 
 Authentication tokens and the generated installation ID are stored with
 `flutter_secure_storage`. The app never embeds SMTP, database, or Laravel secrets.
 
-In the default compatibility mode, the current implementation uses:
+In the default compatibility mode, login uses the phone-capable mobile auth
+route; the remaining app features stay on their compatibility routes:
 
-- `POST /login`
+- `POST /mobile/v1/auth/login`
 - `GET /me`
 - `POST /logout`
 - `GET /student/dashboard?month=YYYY-MM`
@@ -122,7 +123,7 @@ flutter pub get
 flutter analyze
 flutter test
 flutter build apk --release `
-  --dart-define=API_BASE_URL=https://qridify.online/api `
+  --dart-define=API_BASE_URL=https://api.devourasolutions.com/api `
   --dart-define=USE_MOBILE_API=false
 ```
 
@@ -137,3 +138,7 @@ download page or managed-device channel.
 The iOS bundle ID is also `online.qridify.twces`. An Apple Developer team,
 provisioning profile, archive build, and physical-device review must be completed
 on macOS before App Store distribution.
+
+## Security remediation status
+
+See [SECURITY.md](SECURITY.md) for security controls and release checks. Deploy and verify the matching backend and migrations before distributing the updated mobile app. Parent excuse API authorization is tested locally; authenticated deployment/device smoke tests and original TWCES signing/version verification remain pending. Internal audit reports and operational notes are maintained separately.

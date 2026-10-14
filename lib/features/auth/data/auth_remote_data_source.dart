@@ -15,7 +15,7 @@ class AuthRemoteDataSource {
     required String installationId,
   }) async {
     final response = await _apiClient.post(
-      _useMobileApi ? 'auth/login' : 'login',
+      _useMobileApi ? 'auth/login' : 'mobile/v1/auth/login',
       body: {
         'identifier': identifier,
         'password': password,
@@ -28,7 +28,7 @@ class AuthRemoteDataSource {
     return AuthSession(
       accessToken: json['access_token'] as String,
       expiresAt: DateTime.tryParse(json['expires_at'] as String? ?? ''),
-      user: AuthUser.fromJson(_asMap(json['user'])),
+      user: _userFromJson(_asMap(json['user'])),
     );
   }
 
@@ -71,14 +71,57 @@ class AuthRemoteDataSource {
     final response = await _apiClient.get('me', token: token);
     final json = _asMap(response);
     final userJson = json['data'] ?? json['user'];
-    return AuthUser.fromJson(_asMap(userJson));
+    return _userFromJson(_asMap(userJson));
   }
+
+  Future<AuthUser> uploadProfilePhoto(String token, List<int> bytes) async {
+    final response = await _apiClient.postMultipart(
+      _profilePhotoPath,
+      fields: const {},
+      token: token,
+      fileField: 'photo',
+      fileBytes: bytes,
+      fileName: 'profile.png',
+    );
+    return _userFromJson(_asMap(_asMap(response)['user']));
+  }
+
+  Future<AuthUser> removeProfilePhoto(String token) async {
+    final response = await _apiClient.delete(_profilePhotoPath, token: token);
+    return _userFromJson(_asMap(_asMap(response)['user']));
+  }
+
+  String get _profilePhotoPath => _useMobileApi
+      ? 'account/profile-photo'
+      : 'mobile/v1/account/profile-photo';
+
+  AuthUser _userFromJson(Map<String, dynamic> json) => AuthUser.fromJson({
+    ...json,
+    'photo_url': _apiClient.publicAssetUrl(json['photo_url'] as String?),
+  });
 
   Future<void> logout(String token) async {
     await _apiClient.post(
       _useMobileApi ? 'auth/logout' : 'logout',
       token: token,
     );
+  }
+
+  Future<AuthUser> changePassword(
+    String token, {
+    required String currentPassword,
+    required String password,
+  }) async {
+    final response = await _apiClient.post(
+      _useMobileApi ? '../../change-password' : 'change-password',
+      token: token,
+      body: {
+        'current_password': currentPassword,
+        'password': password,
+        'password_confirmation': password,
+      },
+    );
+    return _userFromJson(_asMap(_asMap(response)['user']));
   }
 
   Map<String, dynamic> _asMap(Object? value) {

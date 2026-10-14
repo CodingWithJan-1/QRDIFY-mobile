@@ -210,6 +210,15 @@ _StatusPresentation _statusPresentation(StudentLocationController controller) {
     );
   }
   if (controller.isTracking &&
+      controller.boundaryState == BoundaryState.nearBoundary) {
+    return const _StatusPresentation(
+      title: 'Near the campus boundary',
+      message: 'The GPS reading is close to the boundary. QRDify is checking again before deciding.',
+      icon: Icons.location_searching_outlined,
+      color: _surfaceContainer,
+    );
+  }
+  if (controller.isTracking &&
       controller.boundaryState == BoundaryState.inside) {
     return const _StatusPresentation(
       title: 'Inside the campus boundary',

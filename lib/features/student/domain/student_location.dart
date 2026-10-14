@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'device_location_service.dart';
 
-enum BoundaryState { inside, outside, unknown }
+enum BoundaryState { inside, outside, nearBoundary, unknown }
 
 class StudentLocationConsent {
   const StudentLocationConsent({
@@ -52,6 +52,7 @@ class StudentGeofencePolicy {
     required this.outsideConfirmations,
     required this.insideConfirmations,
     required this.confirmationWindow,
+    this.confirmationSampleInterval = const Duration(seconds: 30),
     required this.trackingWindowActive,
     required this.activeBreach,
     this.version,
@@ -65,6 +66,7 @@ class StudentGeofencePolicy {
   final int outsideConfirmations;
   final int insideConfirmations;
   final Duration confirmationWindow;
+  final Duration confirmationSampleInterval;
   final bool trackingWindowActive;
   final bool activeBreach;
 
@@ -116,6 +118,12 @@ class StudentGeofencePolicy {
           (data['confirmation_window_seconds'] as num?)?.toInt() ?? 300,
         ),
       ),
+      confirmationSampleInterval: Duration(
+        seconds: math.max(
+          1,
+          (data['confirmation_sample_interval_seconds'] as num?)?.toInt() ?? 30,
+        ),
+      ),
       trackingWindowActive: data['tracking_window_active'] == true,
       activeBreach: data['active_breach_id'] != null,
     );
@@ -123,13 +131,13 @@ class StudentGeofencePolicy {
 
   BoundaryState classify(DeviceLocation location) {
     if (!enabled || polygon.length < 3) return BoundaryState.unknown;
-    if (_contains(location.latitude, location.longitude)) {
-      return BoundaryState.inside;
+    final inside = _contains(location.latitude, location.longitude);
+    final uncertaintyBand = boundaryBufferMeters + location.accuracyMeters;
+    if (_distanceToBoundaryMeters(location.latitude, location.longitude) <=
+        uncertaintyBand) {
+      return BoundaryState.nearBoundary;
     }
-    return _distanceToBoundaryMeters(location.latitude, location.longitude) <=
-            boundaryBufferMeters
-        ? BoundaryState.inside
-        : BoundaryState.outside;
+    return inside ? BoundaryState.inside : BoundaryState.outside;
   }
 
   bool _contains(double latitude, double longitude) {

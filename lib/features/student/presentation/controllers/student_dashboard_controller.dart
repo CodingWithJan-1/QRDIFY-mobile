@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import '../../../../core/state/safe_change_notifier.dart';
 
 import '../../../../core/network/api_exception.dart';
 import '../../domain/student_dashboard.dart';
@@ -6,7 +6,7 @@ import '../../domain/student_dashboard_repository.dart';
 
 enum DashboardStatus { initial, loading, loaded, failed }
 
-class StudentDashboardController extends ChangeNotifier {
+class StudentDashboardController extends SafeChangeNotifier {
   StudentDashboardController(this._repository, this._accessToken);
 
   final StudentDashboardRepository _repository;

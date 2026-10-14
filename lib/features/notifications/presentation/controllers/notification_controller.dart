@@ -1,10 +1,10 @@
-import 'package:flutter/foundation.dart';
+import '../../../../core/state/safe_change_notifier.dart';
 
 import '../../../../core/network/api_exception.dart';
 import '../../domain/app_notification.dart';
 import '../../domain/notification_repository.dart';
 
-class NotificationController extends ChangeNotifier {
+class NotificationController extends SafeChangeNotifier {
   NotificationController(this._repository, this._accessToken);
 
   final NotificationRepository _repository;

@@ -1,10 +1,10 @@
-import 'package:flutter/foundation.dart';
+import '../../../../core/state/safe_change_notifier.dart';
 
 import '../../../../core/network/api_exception.dart';
 import '../../domain/student_schedule.dart';
 import '../../domain/student_schedule_repository.dart';
 
-class StudentScheduleController extends ChangeNotifier {
+class StudentScheduleController extends SafeChangeNotifier {
   StudentScheduleController(this._repository, this._accessToken);
 
   final StudentScheduleRepository _repository;

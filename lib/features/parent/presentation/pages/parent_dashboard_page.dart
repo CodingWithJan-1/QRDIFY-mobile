@@ -5,19 +5,28 @@ import '../controllers/parent_home_controller.dart';
 import '../widgets/parent_design.dart';
 
 class ParentDashboardPage extends StatelessWidget {
-  const ParentDashboardPage({required this.controller, super.key});
+  const ParentDashboardPage({
+    required this.controller,
+    required this.onChangeChild,
+    super.key,
+  });
 
   final ParentHomeController controller;
+  final VoidCallback onChangeChild;
 
   @override
   Widget build(BuildContext context) {
+    final child = controller.selectedChild;
     return Scaffold(
       backgroundColor: ParentDesign.background,
-      appBar: const ParentPageHeader(title: 'Child overview'),
+      appBar: ParentPageHeader(
+        title: 'Overview',
+        child: child,
+        onChangeChild: onChangeChild,
+      ),
       body: AnimatedBuilder(
         animation: controller,
         builder: (context, _) {
-          final child = controller.selectedChild;
           final dashboard = controller.dashboard;
           if (child == null) {
             return const ParentEmptyState(
@@ -54,6 +63,7 @@ class ParentDashboardPage extends StatelessWidget {
                 _TodayStatus(
                   status: dashboard.todayStatus,
                   timeIn: dashboard.todayTimeIn,
+                  timeOut: dashboard.todayTimeOut,
                 ),
                 const Divider(height: 36),
                 const ParentSectionLabel('Attendance summary'),
@@ -108,48 +118,110 @@ class ParentDashboardPage extends StatelessWidget {
 }
 
 class _TodayStatus extends StatelessWidget {
-  const _TodayStatus({required this.status, required this.timeIn});
+  const _TodayStatus({
+    required this.status,
+    required this.timeIn,
+    required this.timeOut,
+  });
 
   final String status;
   final String? timeIn;
+  final String? timeOut;
+
+  bool get hasAttendanceTime => timeIn != null || timeOut != null;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: ParentDesign.line),
+      ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Icon(
             Icons.calendar_today_outlined,
-            size: 38,
+            size: 34,
             color: AppColors.muted,
           ),
-          const SizedBox(width: 24),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _sentenceCase(status),
+                  status == 'pending' && !hasAttendanceTime
+                      ? 'Awaiting attendance'
+                      : _sentenceCase(status),
                   style: const TextStyle(
                     color: ParentDesign.deepInk,
-                    fontSize: 25,
+                    fontSize: 22,
                     fontWeight: FontWeight.w800,
                     letterSpacing: -0.4,
                   ),
                 ),
-                if (timeIn != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    'Time in: ${_shortTime(timeIn)}',
-                    style: const TextStyle(color: AppColors.muted),
+                if (!hasAttendanceTime) ...[
+                  const SizedBox(height: 4),
+                  const Text(
+                    'No attendance recorded yet today.',
+                    style: TextStyle(color: AppColors.muted, height: 1.35),
                   ),
+                ],
+                if (timeIn != null || timeOut != null) ...[
+                  const SizedBox(height: 12),
+                  if (timeIn != null)
+                    _AttendanceTimestamp(
+                      icon: Icons.login_rounded,
+                      label: 'Checked in',
+                      time: timeIn!,
+                    ),
+                  if (timeIn != null && timeOut != null)
+                    const SizedBox(height: 8),
+                  if (timeOut != null)
+                    _AttendanceTimestamp(
+                      icon: Icons.logout_rounded,
+                      label: 'Checked out',
+                      time: timeOut!,
+                    ),
                 ],
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AttendanceTimestamp extends StatelessWidget {
+  const _AttendanceTimestamp({
+    required this.icon,
+    required this.label,
+    required this.time,
+  });
+
+  final IconData icon;
+  final String label;
+  final String time;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 17, color: AppColors.blue),
+        const SizedBox(width: 8),
+        Text(
+          '$label · ${_formatAttendanceTime(time)}',
+          style: const TextStyle(
+            color: ParentDesign.deepInk,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -225,5 +297,16 @@ String _sentenceCase(String value) => value.isEmpty
     ? 'Pending'
     : '${value[0].toUpperCase()}${value.substring(1)}';
 
-String _shortTime(String? value) =>
-    value == null ? '' : value.split(':').take(2).join(':');
+String _formatAttendanceTime(String value) {
+  final timestamp = DateTime.tryParse(value);
+  final match = RegExp(r'^(\d{1,2}):(\d{2})').firstMatch(value);
+  final hour = timestamp?.toLocal().hour ?? int.tryParse(match?.group(1) ?? '');
+  final minute =
+      timestamp?.toLocal().minute ?? int.tryParse(match?.group(2) ?? '');
+  if (hour == null || minute == null) return value;
+
+  final hour12 = hour % 12 == 0 ? 12 : hour % 12;
+  final minuteText = minute.toString().padLeft(2, '0');
+  final period = hour < 12 ? 'AM' : 'PM';
+  return '$hour12:$minuteText $period';
+}

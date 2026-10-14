@@ -1,11 +1,11 @@
-import 'package:flutter/foundation.dart';
+import '../../../../core/state/safe_change_notifier.dart';
 
 import '../../../../core/network/api_exception.dart';
 import '../../domain/parent_child.dart';
 import '../../domain/parent_dashboard.dart';
 import '../../domain/parent_repository.dart';
 
-class ParentHomeController extends ChangeNotifier {
+class ParentHomeController extends SafeChangeNotifier {
   ParentHomeController(this._repository, this._accessToken);
 
   final ParentRepository _repository;
@@ -29,13 +29,18 @@ class ParentHomeController extends ChangeNotifier {
       children
         ..clear()
         ..addAll(loaded);
-      selectedChild = children.isEmpty
-          ? null
-          : children.firstWhere(
-              (child) => child.id == previousId,
-              orElse: () => children.first,
-            );
-      await _loadDashboard();
+      selectedChild = null;
+      for (final child in children) {
+        if (child.id == previousId) {
+          selectedChild = child;
+          break;
+        }
+      }
+      if (selectedChild == null) {
+        dashboard = null;
+      } else {
+        await _loadDashboard();
+      }
     } catch (error) {
       errorMessage = _message(error);
     } finally {

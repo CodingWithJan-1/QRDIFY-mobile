@@ -5,6 +5,7 @@ import '../../domain/parent_attendance.dart';
 import '../../domain/parent_child.dart';
 import '../../domain/parent_repository.dart';
 import '../controllers/parent_attendance_controller.dart';
+import 'parent_excuse_letters_page.dart';
 import '../widgets/parent_design.dart';
 
 class ParentAttendancePage extends StatefulWidget {
@@ -12,6 +13,7 @@ class ParentAttendancePage extends StatefulWidget {
     required this.accessToken,
     required this.repository,
     required this.child,
+    required this.onChangeChild,
     this.absencesOnly = false,
     super.key,
   });
@@ -19,6 +21,7 @@ class ParentAttendancePage extends StatefulWidget {
   final String accessToken;
   final ParentRepository repository;
   final ParentChild child;
+  final VoidCallback onChangeChild;
   final bool absencesOnly;
 
   @override
@@ -50,7 +53,11 @@ class _ParentAttendancePageState extends State<ParentAttendancePage> {
     final title = widget.absencesOnly ? 'Absences' : 'Attendance';
     return Scaffold(
       backgroundColor: ParentDesign.background,
-      appBar: ParentPageHeader(title: title),
+      appBar: ParentPageHeader(
+        title: title,
+        child: widget.child,
+        onChangeChild: widget.onChangeChild,
+      ),
       body: AnimatedBuilder(
         animation: _controller,
         builder: (context, _) {
@@ -67,6 +74,21 @@ class _ParentAttendancePageState extends State<ParentAttendancePage> {
                   child: widget.child,
                   card: widget.absencesOnly,
                 ),
+                if (widget.absencesOnly) ...[
+                  const SizedBox(height: 14),
+                  _ExcuseLettersLink(
+                    child: widget.child,
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => ParentExcuseLettersPage(
+                          accessToken: widget.accessToken,
+                          repository: widget.repository,
+                          child: widget.child,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
                 if (!widget.absencesOnly) const Divider(height: 28),
                 if (!widget.absencesOnly && _controller.summary != null) ...[
                   _SummaryCard(summary: _controller.summary!),
@@ -120,6 +142,37 @@ class _ParentAttendancePageState extends State<ParentAttendancePage> {
       ),
     );
   }
+}
+
+class _ExcuseLettersLink extends StatelessWidget {
+  const _ExcuseLettersLink({required this.child, required this.onPressed});
+
+  final ParentChild child;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    elevation: 0,
+    color: ParentDesign.softBlue,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(15),
+      side: const BorderSide(color: ParentDesign.line),
+    ),
+    child: ListTile(
+      onTap: onPressed,
+      leading: const Icon(Icons.description_outlined, color: AppColors.blue),
+      title: const Text(
+        'Excuse letters',
+        style: TextStyle(fontWeight: FontWeight.w800),
+      ),
+      subtitle: Text(
+        child.canSubmitExcuses
+            ? 'Submit and track letters for this child'
+            : 'View letters for this child',
+      ),
+      trailing: const Icon(Icons.chevron_right_rounded),
+    ),
+  );
 }
 
 class _HistoryHeader extends StatelessWidget {

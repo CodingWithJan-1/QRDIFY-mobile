@@ -14,6 +14,7 @@ import 'package:qrdify/features/parent/domain/parent_attendance.dart';
 import 'package:qrdify/features/parent/domain/parent_child.dart';
 import 'package:qrdify/features/parent/domain/parent_dashboard.dart';
 import 'package:qrdify/features/parent/domain/parent_enrollment_repository.dart';
+import 'package:qrdify/features/parent/domain/parent_excuse_letter.dart';
 import 'package:qrdify/features/parent/domain/parent_repository.dart';
 import 'package:qrdify/features/student/domain/device_location_service.dart';
 import 'package:qrdify/features/student/domain/excuse_letter.dart';
@@ -82,18 +83,34 @@ void main() {
 
     await tester.tap(find.text('Excuses'));
     await tester.pumpAndSettle();
-    expect(find.text('Create'), findsOneWidget);
-
-    await tester.tap(find.text('Create'));
-    await tester.pumpAndSettle();
-    expect(find.text('Create Excuse Letter'), findsOneWidget);
-    expect(find.text('Reason for absence'), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.close_rounded));
-    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'A parent or authorized guardian submits excuse letters for students.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Create'), findsNothing);
 
     await tester.tap(find.text('Alerts'));
     await tester.pumpAndSettle();
     expect(find.text('No notifications to show.'), findsOneWidget);
+  });
+
+  testWidgets('parent account menu opens profile photo controls', (
+    tester,
+  ) async {
+    final controller = AuthController(
+      _FakeAuthRepository(restoredSession: _parentSession),
+    );
+    await tester.pumpWidget(QrdifyApp(dependencies: _dependencies(controller)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Account menu'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('My profile'));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose photo'), findsOneWidget);
+    expect(find.textContaining('10 MiB'), findsOneWidget);
+    expect(find.text('Sample Parent'), findsOneWidget);
   });
 
   testWidgets('restores a parent session', (tester) async {
@@ -110,7 +127,7 @@ void main() {
 
     await tester.tap(find.text('Sample Child'));
     await tester.pumpAndSettle();
-    expect(find.text('Child overview'), findsOneWidget);
+    expect(find.widgetWithText(AppBar, 'Overview'), findsOneWidget);
     expect(find.text('Present'), findsWidgets);
 
     await tester.tap(find.text('Attendance'));
@@ -273,6 +290,67 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Welcome Back!'), findsOneWidget);
   });
+  testWidgets(
+    'temporary-password users must change password before opening records',
+    (tester) async {
+      final initial = AuthSession(
+        accessToken: 'temporary-parent-token',
+        user: AuthUser(
+          id: 201,
+          name: 'Sample Parent',
+          email: 'parent@example.test',
+          roles: ['parent'],
+          needsPasswordChange: true,
+        ),
+      );
+      final controller = AuthController(
+        _FakeAuthRepository(restoredSession: initial),
+      );
+      await tester.pumpWidget(
+        QrdifyApp(dependencies: _dependencies(controller)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Secure your account'), findsOneWidget);
+      expect(find.textContaining('Sample Parent'), findsNothing);
+      await tester.enterText(
+        find.byType(TextFormField).at(0),
+        'temporary-password',
+      );
+      await tester.enterText(
+        find.byType(TextFormField).at(1),
+        'new-private-password',
+      );
+      await tester.enterText(
+        find.byType(TextFormField).at(2),
+        'new-private-password',
+      );
+      await tester.tap(find.text('Change password'));
+      await tester.pumpAndSettle();
+      expect(controller.mustChangePassword, isFalse);
+      expect(find.text('Secure your account'), findsNothing);
+      expect(find.textContaining('Sample Parent'), findsOneWidget);
+    },
+  );
+
+  testWidgets('signing out removes a private pushed page from navigation', (
+    tester,
+  ) async {
+    final controller = AuthController(
+      _FakeAuthRepository(restoredSession: _parentSession),
+    );
+    await tester.pumpWidget(QrdifyApp(dependencies: _dependencies(controller)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Account menu'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('My profile'));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose photo'), findsOneWidget);
+    await controller.logout();
+    await tester.pumpAndSettle();
+    expect(find.text('Choose photo'), findsNothing);
+    expect(find.text('Welcome Back!'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 AppDependencies _dependencies(
@@ -317,6 +395,29 @@ const _parentSession = AuthSession(
 );
 
 class _FakeAuthRepository implements AuthRepository {
+  @override
+  Future<void> clearLocalSession() async {}
+
+  @override
+  void setSessionInvalidationHandler(
+    void Function(String, ApiException)? handler,
+  ) {}
+
+  @override
+  Future<AuthUser> changePassword({
+    required String currentPassword,
+    required String password,
+  }) async {
+    final user = (loginSession ?? restoredSession)!.user;
+    return AuthUser(
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      roles: user.roles,
+      needsPasswordChange: false,
+    );
+  }
+
   _FakeAuthRepository({this.restoredSession, this.loginSession});
 
   final AuthSession? restoredSession;
@@ -358,6 +459,14 @@ class _FakeAuthRepository implements AuthRepository {
 
   @override
   Future<void> logout() async {}
+
+  @override
+  Future<AuthUser> uploadProfilePhoto(List<int> bytes) async =>
+      (loginSession ?? restoredSession)!.user;
+
+  @override
+  Future<AuthUser> removeProfilePhoto() async =>
+      (loginSession ?? restoredSession)!.user;
 
   @override
   void close() {}
@@ -648,6 +757,29 @@ class _FakeParentRepository implements ParentRepository {
     ),
     currentPage: 1,
     lastPage: 1,
+  );
+
+  @override
+  Future<List<ParentExcuseLetter>> fetchExcuseLetters({
+    required String accessToken,
+    required int childId,
+  }) async => const [];
+
+  @override
+  Future<ParentExcuseLetter> submitExcuseLetter({
+    required String accessToken,
+    required int childId,
+    required String title,
+    required DateTime absentDate,
+    required String reason,
+    List<int>? attachmentBytes,
+    String? attachmentName,
+  }) async => ParentExcuseLetter(
+    id: 1,
+    title: title,
+    absentDate: absentDate.toIso8601String(),
+    reason: reason,
+    status: 'pending',
   );
 }
 

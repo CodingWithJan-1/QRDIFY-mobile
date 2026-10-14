@@ -9,6 +9,7 @@ class ParentChildDashboard {
     required this.excused,
     required this.todayStatus,
     required this.todayTimeIn,
+    this.todayTimeOut,
   });
 
   factory ParentChildDashboard.fromJson(Map<String, dynamic> json) {
@@ -26,6 +27,7 @@ class ParentChildDashboard {
       excused: count('excused'),
       todayStatus: '${today['status'] ?? 'pending'}'.toLowerCase(),
       todayTimeIn: _text(today['time_in']),
+      todayTimeOut: _text(today['time_out']),
     );
   }
 
@@ -38,6 +40,7 @@ class ParentChildDashboard {
   final int excused;
   final String todayStatus;
   final String? todayTimeIn;
+  final String? todayTimeOut;
 }
 
 Map<String, dynamic> _map(Object? value) =>

@@ -16,6 +16,7 @@ import '../features/student/domain/student_location_repository.dart';
 import '../features/student/domain/student_schedule_repository.dart';
 import '../features/student/presentation/pages/student_home_page.dart';
 import '../shared/presentation/school_brand.dart';
+import '../features/auth/presentation/pages/change_password_page.dart';
 
 class AuthGate extends StatelessWidget {
   const AuthGate({
@@ -54,8 +55,12 @@ class AuthGate extends StatelessWidget {
 
         final session = controller.session;
         if (controller.status == AuthStatus.authenticated && session != null) {
+          if (controller.mustChangePassword) {
+            return ChangePasswordPage(controller: controller);
+          }
           return switch (session.user.portalRole) {
             PortalRole.student => StudentHomePage(
+              key: ValueKey(session.accessToken),
               user: session.user,
               accessToken: session.accessToken,
               dashboardRepository: studentDashboardRepository,
@@ -68,12 +73,15 @@ class AuthGate extends StatelessWidget {
               onLogout: controller.logout,
             ),
             PortalRole.parent => ParentHomePage(
+              key: ValueKey(session.accessToken),
               user: session.user,
               accessToken: session.accessToken,
               parentRepository: parentRepository,
               parentEnrollmentRepository: parentEnrollmentRepository,
               notificationRepository: notificationRepository,
               onLogout: controller.logout,
+              onUploadPhoto: controller.uploadProfilePhoto,
+              onRemovePhoto: controller.removeProfilePhoto,
             ),
             null => _loginPage(context),
           };

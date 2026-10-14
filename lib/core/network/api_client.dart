@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -10,16 +11,20 @@ class ApiClient {
     required String baseUrl,
     http.Client? httpClient,
     this.timeout = const Duration(seconds: 20),
+    this.maxResponseBytes = 8 * 1024 * 1024,
   }) : _baseUri = Uri.parse(baseUrl),
        _httpClient = httpClient ?? http.Client();
 
   final Uri _baseUri;
   final http.Client _httpClient;
   final Duration timeout;
+  final int maxResponseBytes;
+  void Function(String token, ApiException error)? onSessionInvalidated;
 
   Future<Object?> get(String path, {String? token}) {
     return _send(
-      () => _httpClient.get(_uri(path), headers: _headers(token: token)),
+      () => _request('GET', path, headers: _headers(token: token)),
+      token: token,
     );
   }
 
@@ -30,8 +35,9 @@ class ApiClient {
     Map<String, String>? headers,
   }) {
     return _send(
-      () => _httpClient.post(
-        _uri(path),
+      () => _request(
+        'POST',
+        path,
         headers: _headers(
           token: token,
           hasJsonBody: true,
@@ -39,6 +45,7 @@ class ApiClient {
         ),
         body: jsonEncode(body ?? const <String, Object?>{}),
       ),
+      token: token,
     );
   }
 
@@ -52,6 +59,7 @@ class ApiClient {
   }) {
     return _send(() async {
       final request = http.MultipartRequest('POST', _uri(path));
+      request.followRedirects = false;
       request.headers.addAll(_headers(token: token));
       request.fields.addAll(fields);
       if (fileField != null && fileBytes != null) {
@@ -64,8 +72,8 @@ class ApiClient {
         );
       }
       final streamedResponse = await _httpClient.send(request);
-      return http.Response.fromStream(streamedResponse);
-    });
+      return _readResponse(streamedResponse);
+    }, token: token);
   }
 
   Future<Object?> put(
@@ -74,23 +82,84 @@ class ApiClient {
     String? token,
   }) {
     return _send(
-      () => _httpClient.put(
-        _uri(path),
+      () => _request(
+        'PUT',
+        path,
         headers: _headers(token: token, hasJsonBody: true),
         body: jsonEncode(body ?? const <String, Object?>{}),
       ),
+      token: token,
     );
   }
 
   Future<Object?> delete(String path, {String? token}) {
     return _send(
-      () => _httpClient.delete(_uri(path), headers: _headers(token: token)),
+      () => _request('DELETE', path, headers: _headers(token: token)),
+      token: token,
+    );
+  }
+
+  Future<http.Response> _request(
+    String method,
+    String path, {
+    required Map<String, String> headers,
+    String? body,
+  }) async {
+    final request = http.Request(method, _uri(path))..followRedirects = false;
+    request.headers.addAll(headers);
+    if (body != null) request.body = body;
+    return _readResponse(await _httpClient.send(request));
+  }
+
+  Future<http.Response> _readResponse(http.StreamedResponse response) async {
+    final bytes = BytesBuilder(copy: false);
+    await for (final chunk in response.stream) {
+      if (bytes.length + chunk.length > maxResponseBytes) {
+        throw const ApiException(
+          message: 'The server response is too large. Please contact school support.',
+          code: 'response_too_large',
+        );
+      }
+      bytes.add(chunk);
+    }
+    return http.Response.bytes(
+      bytes.takeBytes(),
+      response.statusCode,
+      headers: response.headers,
+      request: response.request,
+      reasonPhrase: response.reasonPhrase,
     );
   }
 
   Uri _uri(String path) {
     final relativePath = path.replaceFirst(RegExp(r'^/+'), '');
-    return _baseUri.resolve(relativePath);
+    final uri = _baseUri.resolve(relativePath);
+    if (!['http', 'https'].contains(uri.scheme) ||
+        uri.origin != _baseUri.origin ||
+        uri.userInfo.isNotEmpty) {
+      throw const ApiException(
+        message: 'Requests must use the configured school API.',
+        code: 'invalid_api_origin',
+      );
+    }
+    return uri;
+  }
+
+  String? publicAssetUrl(String? path) {
+    if (path == null || path.trim().isEmpty) return null;
+    final uri = Uri.tryParse(path);
+    if (uri == null) return null;
+    if (uri.hasScheme) {
+      return ['http', 'https'].contains(uri.scheme) &&
+              uri.origin == _baseUri.origin &&
+              uri.userInfo.isEmpty
+          ? '$uri'
+          : null;
+    }
+    final resolved = _baseUri.resolve(path.startsWith('/') ? path : '/$path');
+    return resolved.origin == _baseUri.origin && resolved.userInfo.isEmpty
+        ? '$resolved'
+        : null;
   }
 
   Map<String, String> _headers({
@@ -106,7 +175,10 @@ class ApiClient {
     };
   }
 
-  Future<Object?> _send(Future<http.Response> Function() request) async {
+  Future<Object?> _send(
+    Future<http.Response> Function() request, {
+    String? token,
+  }) async {
     late final http.Response response;
 
     try {
@@ -128,7 +200,14 @@ class ApiClient {
       return decoded;
     }
 
-    throw _exceptionFrom(response.statusCode, decoded);
+    final error = _exceptionFrom(response.statusCode, decoded);
+    if (token != null &&
+        (error.isUnauthorized ||
+            error.code == 'account_blocked' ||
+            error.code == 'password_change_required')) {
+      onSessionInvalidated?.call(token, error);
+    }
+    throw error;
   }
 
   Object? _decodeBody(String body) {

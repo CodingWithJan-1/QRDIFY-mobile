@@ -10,7 +10,7 @@ class AppConfig {
     );
     const useMobileApi = bool.fromEnvironment('USE_MOBILE_API');
     final defaultUrl = kReleaseMode
-        ? 'https://qridify.online/api'
+        ? 'https://api.devourasolutions.com/api'
         : 'http://10.0.2.2:8000/api';
 
     return AppConfig(
@@ -31,7 +31,12 @@ class AppConfig {
     }
 
     final uri = Uri.tryParse(trimmed);
-    if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+    if (uri == null ||
+        !['http', 'https'].contains(uri.scheme.toLowerCase()) ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasQuery ||
+        uri.hasFragment) {
       throw FormatException('API_BASE_URL is invalid: $trimmed');
     }
     if (kReleaseMode && uri.scheme.toLowerCase() != 'https') {

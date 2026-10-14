@@ -1,11 +1,11 @@
-import 'package:flutter/foundation.dart';
+import '../../../../core/state/safe_change_notifier.dart';
 
 import '../../../../core/network/api_exception.dart';
 import '../../domain/parent_enrollment_repository.dart';
 
 enum ParentEnrollmentStep { invitation, verification, complete }
 
-class ParentEnrollmentController extends ChangeNotifier {
+class ParentEnrollmentController extends SafeChangeNotifier {
   ParentEnrollmentController(this._repository, {this.accessToken});
 
   final ParentEnrollmentRepository _repository;

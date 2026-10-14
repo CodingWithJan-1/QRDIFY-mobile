@@ -3,6 +3,7 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/storage/session_store.dart';
 import '../domain/auth_repository.dart';
 import '../domain/auth_session.dart';
+import '../domain/auth_user.dart';
 import '../domain/password_recovery.dart';
 import 'auth_remote_data_source.dart';
 
@@ -18,19 +19,47 @@ class AuthRepositoryImpl implements AuthRepository {
   final ApiClient _apiClient;
 
   String? _accessToken;
+  bool _locallyInvalidated = false;
+  int _generation = 0;
+  Future<void> _storeQueue = Future.value();
+
+  Future<T> _withStore<T>(Future<T> Function() action) {
+    final result = _storeQueue.then((_) => action());
+    _storeQueue = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return result;
+  }
+
+  @override
+  void setSessionInvalidationHandler(
+    void Function(String token, ApiException error)? handler,
+  ) {
+    _apiClient.onSessionInvalidated = handler;
+  }
 
   @override
   Future<AuthSession?> restoreSession() async {
+    if (_locallyInvalidated) return null;
+    final generation = _generation;
     final token = await _sessionStore.readAccessToken();
     if (token == null || token.isEmpty) return null;
+    final expiresAt = await _sessionStore.readExpiresAt();
+    if (generation != _generation) return null;
+    if (expiresAt != null && !expiresAt.isAfter(DateTime.now())) {
+      await clearLocalSession();
+      return null;
+    }
 
     try {
       final user = await _remoteDataSource.getCurrentUser(token);
+      if (generation != _generation) return null;
       _accessToken = token;
-      return AuthSession(accessToken: token, user: user);
+      return AuthSession(accessToken: token, user: user, expiresAt: expiresAt);
     } on ApiException catch (error) {
-      if (error.isUnauthorized || error.statusCode == 403) {
-        await _clearSession();
+      if (error.isUnauthorized || error.code == 'account_blocked') {
+        if (generation == _generation) await clearLocalSession();
         return null;
       }
       rethrow;
@@ -42,6 +71,7 @@ class AuthRepositoryImpl implements AuthRepository {
     required String identifier,
     required String password,
   }) async {
+    final generation = ++_generation;
     final installationId = await _sessionStore.getOrCreateInstallationId();
     final session = await _remoteDataSource.login(
       identifier: identifier,
@@ -49,8 +79,24 @@ class AuthRepositoryImpl implements AuthRepository {
       installationId: installationId,
     );
 
-    await _sessionStore.writeAccessToken(session.accessToken);
+    await _withStore(() async {
+      if (generation != _generation) {
+        throw const ApiException(
+          message: 'Sign-in was cancelled. Please try again.',
+        );
+      }
+      await _sessionStore.writeAccessToken(
+        session.accessToken,
+        expiresAt: session.expiresAt,
+      );
+    });
+    if (generation != _generation) {
+      throw const ApiException(
+        message: 'Sign-in was cancelled. Please try again.',
+      );
+    }
     _accessToken = session.accessToken;
+    _locallyInvalidated = false;
     return session;
   }
 
@@ -72,19 +118,66 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<void> logout() async {
-    final token = _accessToken ?? await _sessionStore.readAccessToken();
+    var token = _accessToken;
+    try {
+      token ??= await _sessionStore.readAccessToken();
+    } on Object {
+      // A failed read must not prevent either durable clearing mechanism.
+    }
+    await clearLocalSession();
     try {
       if (token != null) await _remoteDataSource.logout(token);
-    } finally {
-      await _clearSession();
+    } on ApiException {
+      // Local logout is durable; offline server revocation is not guaranteed.
     }
   }
 
-  Future<void> _clearSession() async {
+  @override
+  Future<void> clearLocalSession() async {
+    _generation++;
     _accessToken = null;
-    await _sessionStore.clearAccessToken();
+    _locallyInvalidated = true;
+    await _withStore(_sessionStore.clearAccessToken);
+  }
+
+  Future<String> _profileToken() async {
+    if (_locallyInvalidated) {
+      throw const ApiException(
+        statusCode: 401,
+        message: 'Please sign in again.',
+      );
+    }
+    final token = _accessToken ?? await _sessionStore.readAccessToken();
+    if (token == null || token.isEmpty) {
+      throw const ApiException(
+        statusCode: 401,
+        message: 'Please sign in again.',
+      );
+    }
+    return token;
   }
 
   @override
-  void close() => _apiClient.close();
+  Future<AuthUser> uploadProfilePhoto(List<int> bytes) async =>
+      _remoteDataSource.uploadProfilePhoto(await _profileToken(), bytes);
+
+  @override
+  Future<AuthUser> removeProfilePhoto() async =>
+      _remoteDataSource.removeProfilePhoto(await _profileToken());
+
+  @override
+  Future<AuthUser> changePassword({
+    required String currentPassword,
+    required String password,
+  }) async => _remoteDataSource.changePassword(
+    await _profileToken(),
+    currentPassword: currentPassword,
+    password: password,
+  );
+
+  @override
+  void close() {
+    _apiClient.onSessionInvalidated = null;
+    _apiClient.close();
+  }
 }

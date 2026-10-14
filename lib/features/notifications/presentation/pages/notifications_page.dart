@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../domain/app_notification.dart';
 import '../../domain/notification_repository.dart';
+import '../../../parent/domain/parent_child.dart';
+import '../../../parent/presentation/widgets/parent_design.dart';
 import '../controllers/notification_controller.dart';
 
 enum _NotificationFilter { all, unread }
@@ -12,12 +14,16 @@ class NotificationsPage extends StatefulWidget {
     required this.accessToken,
     required this.repository,
     this.parentStyle = false,
+    this.child,
+    this.onChangeChild,
     super.key,
   });
 
   final String accessToken;
   final NotificationRepository repository;
   final bool parentStyle;
+  final ParentChild? child;
+  final VoidCallback? onChangeChild;
 
   @override
   State<NotificationsPage> createState() => _NotificationsPageState();
@@ -42,29 +48,28 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final readAllAction = AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) => TextButton(
+        onPressed: _controller.unreadCount == 0 || _controller.isWorking
+            ? null
+            : _markAllRead,
+        child: const Text('Read all'),
+      ),
+    );
     return Scaffold(
       backgroundColor: widget.parentStyle ? const Color(0xFFF6FAFE) : null,
-      appBar: AppBar(
-        toolbarHeight: widget.parentStyle ? 82 : null,
-        title: Text(
-          'Notifications',
-          style: widget.parentStyle
-              ? const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)
-              : null,
-        ),
-        actions: [
-          AnimatedBuilder(
-            animation: _controller,
-            builder: (context, _) => TextButton(
-              onPressed: _controller.unreadCount == 0 || _controller.isWorking
-                  ? null
-                  : _markAllRead,
-              child: const Text('Read all'),
+      appBar: widget.parentStyle
+          ? ParentPageHeader(
+              title: 'Alerts',
+              child: widget.child,
+              onChangeChild: widget.onChangeChild,
+              actions: [readAllAction, const SizedBox(width: 8)],
+            )
+          : AppBar(
+              title: const Text('Notifications'),
+              actions: [readAllAction, const SizedBox(width: 8)],
             ),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
       body: AnimatedBuilder(
         animation: _controller,
         builder: (context, _) {

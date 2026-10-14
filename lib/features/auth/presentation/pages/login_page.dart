@@ -157,6 +157,11 @@ class _LoginPageState extends State<LoginPage> {
                               const SizedBox(height: 16),
                               _ErrorBanner(message: error),
                             ],
+                            if (widget.controller.needsLogoutRetry)
+                              TextButton(
+                                onPressed: widget.controller.logout,
+                                child: const Text('Retry signing out'),
+                              ),
                             const SizedBox(height: 24),
                             FilledButton(
                               onPressed: widget.controller.isAuthenticating
