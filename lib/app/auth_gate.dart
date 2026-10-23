@@ -96,8 +96,10 @@ class AuthGate extends StatelessWidget {
     controller: controller,
     onParentInvitation: () => Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            ParentEnrollmentPage(repository: parentEnrollmentRepository),
+        builder: (_) => ParentEnrollmentPage(
+          repository: parentEnrollmentRepository,
+          authController: controller,
+        ),
       ),
     ),
   );

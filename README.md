@@ -80,7 +80,18 @@ flutter run --dart-define=USE_MOBILE_API=true `
 Parent reads and invitation enrollment use the same `/api` base URL and the
 `/api/mobile/v1` namespace.
 
+After new-parent registration, the app uses `data.login_identifier` from the
+successful invitation acceptance response to sign in through the normal mobile
+login endpoint and save the session. Deploy the matching Laravel response update
+before distributing this app build. Older backends retain the manual sign-in
+completion screen. Existing parents still sign in before linking another child.
+
 ## Current implementation
+
+For the production web API's 50-student time in/out test and local guardian numbers
+setup, see [tool/attendance-lab.md](tool/attendance-lab.md). Start with
+`python tool/attendance_prod.py init`; private configuration and test manifests
+stay in the Git-ignored `tool/.attendance-lab/` folder.
 
 Available against the existing Laravel API:
 
@@ -97,16 +108,22 @@ Available against the existing Laravel API:
   windows, and controls under Account -> Location & privacy
 - Parent linked-child selection, overview, attendance, recorded absences, and
   alerts with child-scoped authorization
-- Parent invitation token, email verification code, and account creation flow
+- Parent invitation token, email/SMS verification, and account creation with automatic sign-in to the children screen
 - Attendance email delivery to eligible linked Parent accounts, with the legacy
   Student guardian email retained only for records without Parent links
 
-Native push, Parent location history, Parent excuse submission, and a durable
-offline location queue stay disabled until their backend contracts are live.
+Approved parents can submit excuse letters for the selected child when their
+school-approved link permits it, with image previews and teacher review.
+Native push, Parent location history, and a durable offline location queue stay
+disabled until their backend contracts are live.
 Invitation delivery requires configured backend mail and queue services.
 See `development-report.md` for the current access and setup blockers.
 
 ## Android production build
+
+Current release: **1.1.3 (build 5)**. This release includes automatic sign-in after
+parent registration and the parent excuse form layout, keyboard, and image
+preview fixes.
 
 The production application ID is `online.qridify.twces`. Release builds refuse
 to use Flutter's debug key.

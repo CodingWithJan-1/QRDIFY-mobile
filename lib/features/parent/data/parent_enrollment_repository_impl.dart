@@ -51,10 +51,14 @@ class ParentEnrollmentRepositoryImpl implements ParentEnrollmentRepository {
     final json = _map(response, 'Invalid invitation acceptance response.');
     final data = _map(json['data'], 'Missing invitation acceptance data.');
     final link = _map(data['link'], 'Missing Parent link data.');
+    final identifier = data['login_identifier'];
 
     return ParentEnrollmentResult(
       parentUserId: (data['parent_user_id'] as num).toInt(),
       studentId: (link['student_id'] as num).toInt(),
+      loginIdentifier: identifier is String && identifier.trim().isNotEmpty
+          ? identifier.trim()
+          : null,
     );
   }
 

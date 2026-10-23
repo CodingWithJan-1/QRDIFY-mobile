@@ -4,10 +4,12 @@ class ParentEnrollmentResult {
   const ParentEnrollmentResult({
     required this.parentUserId,
     required this.studentId,
+    this.loginIdentifier,
   });
 
   final int parentUserId;
   final int studentId;
+  final String? loginIdentifier;
 }
 
 abstract interface class ParentEnrollmentRepository {

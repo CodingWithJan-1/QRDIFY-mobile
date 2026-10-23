@@ -101,10 +101,60 @@ void main() {
 
       expect(result.parentUserId, 201);
       expect(result.studentId, 15);
+      expect(result.loginIdentifier, isNull);
       expect(requestNumber, 2);
       apiClient.close();
     },
   );
+  for (final useMobileApi in [false, true]) {
+    for (final identifier in ['guardian@example.test', '+639387671972']) {
+      test(
+        'reads the verified sign-in identifier $identifier (mobile API: $useMobileApi)',
+        () async {
+          final apiClient = ApiClient(
+            baseUrl: useMobileApi
+                ? 'https://school.example/api/mobile/v1/'
+                : 'https://school.example/api/',
+            httpClient: MockClient((request) async {
+              expect(
+                request.url.path,
+                '/api/mobile/v1/parent-invitations/accept',
+              );
+              expect(request.headers['authorization'], isNull);
+              final body = jsonDecode(request.body) as Map<String, dynamic>;
+              expect(body['password'], 'StrongPassword123!');
+              expect(body['password_confirmation'], body['password']);
+              return http.Response(
+                jsonEncode({
+                  'data': {
+                    'parent_user_id': 201,
+                    'login_identifier': identifier,
+                    'link': {'student_id': 15},
+                  },
+                }),
+                201,
+              );
+            }),
+          );
+          addTearDown(apiClient.close);
+
+          final result =
+              await ParentEnrollmentRepositoryImpl(
+                apiClient,
+                useMobileApi,
+              ).acceptInvitation(
+                invitationToken: 'invite-token',
+                verificationId: 'verification-id',
+                code: '123456',
+                name: 'Sample Parent',
+                password: 'StrongPassword123!',
+              );
+
+          expect(result.loginIdentifier, identifier);
+        },
+      );
+    }
+  }
 }
 
 const _childrenFixture = {

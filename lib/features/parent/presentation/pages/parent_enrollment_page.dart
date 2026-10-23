@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/presentation/school_brand.dart';
+import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../domain/parent_enrollment_repository.dart';
 import '../controllers/parent_enrollment_controller.dart';
 
@@ -11,11 +12,13 @@ class ParentEnrollmentPage extends StatefulWidget {
   const ParentEnrollmentPage({
     required this.repository,
     this.accessToken,
+    this.authController,
     super.key,
   });
 
   final ParentEnrollmentRepository repository;
   final String? accessToken;
+  final AuthController? authController;
 
   @override
   State<ParentEnrollmentPage> createState() => _ParentEnrollmentPageState();
@@ -29,6 +32,8 @@ class _ParentEnrollmentPageState extends State<ParentEnrollmentPage> {
   final _passwordController = TextEditingController();
   late final ParentEnrollmentController _controller;
   bool _obscurePassword = true;
+  bool _signingIn = false;
+  String? _signInError;
 
   @override
   void initState() {
@@ -51,93 +56,100 @@ class _ParentEnrollmentPageState extends State<ParentEnrollmentPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Parent invitation')),
-      body: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) {
-          if (_controller.step == ParentEnrollmentStep.complete) {
-            return _CompleteView(existingParent: _controller.isExistingParent);
-          }
-          if (_controller.requiresSignIn) {
-            return _ExistingParentView(
-              channel: _controller.channel,
-              onReturnToSignIn: () => Navigator.of(context).pop(),
-            );
-          }
+    return PopScope(
+      canPop: !_signingIn,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Parent invitation')),
+        body: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) {
+            if (_controller.step == ParentEnrollmentStep.complete) {
+              return _CompleteView(
+                existingParent: _controller.isExistingParent,
+                signingIn: _signingIn,
+                signInError: _signInError,
+              );
+            }
+            if (_controller.requiresSignIn) {
+              return _ExistingParentView(
+                channel: _controller.channel,
+                onReturnToSignIn: () => Navigator.of(context).pop(),
+              );
+            }
 
-          return ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              const Center(child: SchoolBrandLogo(size: 72)),
-              const SizedBox(height: 18),
-              Text(
-                _controller.step == ParentEnrollmentStep.invitation
-                    ? 'Connect your approved invitation'
-                    : _controller.channel == ParentInvitationChannel.sms
-                    ? 'Verify your mobile number'
-                    : 'Verify your email',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _controller.step == ParentEnrollmentStep.invitation
-                    ? 'Choose how you received the invitation, then enter the token sent by the school. Each invitation connects one child.'
-                    : _controller.channel == ParentInvitationChannel.sms
-                    ? 'Enter the six-digit code sent to the approved mobile number.'
-                    : 'Enter the six-digit code sent to the approved email address.',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.muted, height: 1.45),
-              ),
-              const SizedBox(height: 24),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Form(
-                    key: _formKey,
-                    child: _controller.step == ParentEnrollmentStep.invitation
-                        ? _InvitationForm(
-                            tokenController: _tokenController,
-                            channel: _controller.channel,
-                            isWorking: _controller.isWorking,
-                            onChannelChanged: _controller.selectChannel,
-                            onSubmit: _requestCode,
-                          )
-                        : _VerificationForm(
-                            codeController: _codeController,
-                            nameController: _nameController,
-                            passwordController: _passwordController,
-                            channel: _controller.channel,
-                            existingParent: _controller.isExistingParent,
-                            isWorking: _controller.isWorking,
-                            obscurePassword: _obscurePassword,
-                            onTogglePassword: () => setState(
-                              () => _obscurePassword = !_obscurePassword,
+            return ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
+                const Center(child: SchoolBrandLogo(size: 72)),
+                const SizedBox(height: 18),
+                Text(
+                  _controller.step == ParentEnrollmentStep.invitation
+                      ? 'Connect your approved invitation'
+                      : _controller.channel == ParentInvitationChannel.sms
+                      ? 'Verify your mobile number'
+                      : 'Verify your email',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _controller.step == ParentEnrollmentStep.invitation
+                      ? 'Choose how you received the invitation, then enter the token sent by the school. Each invitation connects one child.'
+                      : _controller.channel == ParentInvitationChannel.sms
+                      ? 'Enter the six-digit code sent to the approved mobile number.'
+                      : 'Enter the six-digit code sent to the approved email address.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppColors.muted, height: 1.45),
+                ),
+                const SizedBox(height: 24),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Form(
+                      key: _formKey,
+                      child: _controller.step == ParentEnrollmentStep.invitation
+                          ? _InvitationForm(
+                              tokenController: _tokenController,
+                              channel: _controller.channel,
+                              isWorking: _controller.isWorking,
+                              onChannelChanged: _controller.selectChannel,
+                              onSubmit: _requestCode,
+                            )
+                          : _VerificationForm(
+                              codeController: _codeController,
+                              nameController: _nameController,
+                              passwordController: _passwordController,
+                              channel: _controller.channel,
+                              existingParent: _controller.isExistingParent,
+                              isWorking: _controller.isWorking,
+                              obscurePassword: _obscurePassword,
+                              onTogglePassword: () => setState(
+                                () => _obscurePassword = !_obscurePassword,
+                              ),
+                              onSubmit: _accept,
+                              onStartOver: _startOver,
                             ),
-                            onSubmit: _accept,
-                            onStartOver: _startOver,
-                          ),
+                    ),
                   ),
                 ),
-              ),
-              if (_controller.errorMessage case final message?) ...[
-                const SizedBox(height: 12),
-                _ErrorBanner(message: message),
-              ],
-              const SizedBox(height: 16),
-              const Text(
-                'A token is valid only after the school approves the Parent-to-Student relationship. QRDify never links children by matching a surname, phone number, or email address.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.muted,
-                  fontSize: 12,
-                  height: 1.4,
+                if (_controller.errorMessage case final message?) ...[
+                  const SizedBox(height: 12),
+                  _ErrorBanner(message: message),
+                ],
+                const SizedBox(height: 16),
+                const Text(
+                  'A token is valid only after the school approves the Parent-to-Student relationship. QRDify never links children by matching a surname, phone number, or email address.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.muted,
+                    fontSize: 12,
+                    height: 1.4,
+                  ),
                 ),
-              ),
-            ],
-          );
-        },
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -202,17 +214,35 @@ class _ParentEnrollmentPageState extends State<ParentEnrollmentPage> {
   }
 
   Future<void> _accept() async {
+    if (_controller.isWorking || _signingIn) return;
     FocusScope.of(context).unfocus();
     if (!(_formKey.currentState?.validate() ?? false)) return;
-    await _controller.accept(
+    final password = _passwordController.text;
+    final accepted = await _controller.accept(
       code: _codeController.text,
       name: _nameController.text,
-      password: _passwordController.text,
+      password: password,
     );
-    if (_controller.step == ParentEnrollmentStep.complete) {
-      _codeController.clear();
-      _passwordController.clear();
+    if (!mounted || !accepted) return;
+    _codeController.clear();
+    _passwordController.clear();
+
+    final auth = widget.authController;
+    final identifier = _controller.result?.loginIdentifier;
+    if (_controller.isExistingParent || auth == null || identifier == null) {
+      return;
     }
+
+    setState(() => _signingIn = true);
+    await auth.login(identifier: identifier, password: password);
+    if (!mounted) return;
+    setState(() {
+      _signingIn = false;
+      if (auth.status != AuthStatus.authenticated) {
+        _signInError = 'Automatic sign-in could not finish. Your account was created successfully. Return to sign in using your approved email address or mobile number and the password you just chose.';
+      }
+    });
+    // QrdifyApp closes the enrollment route when the session token changes.
   }
 
   void _startOver() {
@@ -459,9 +489,15 @@ class _VerificationForm extends StatelessWidget {
 }
 
 class _CompleteView extends StatelessWidget {
-  const _CompleteView({required this.existingParent});
+  const _CompleteView({
+    required this.existingParent,
+    required this.signingIn,
+    this.signInError,
+  });
 
   final bool existingParent;
+  final bool signingIn;
+  final String? signInError;
 
   @override
   Widget build(BuildContext context) {
@@ -489,17 +525,27 @@ class _CompleteView extends StatelessWidget {
             Text(
               existingParent
                   ? 'The approved child is now available in your Parent dashboard.'
+                  : signingIn
+                  ? 'Signing you in…'
                   : 'Your invitation was accepted. Sign in with your new Parent account.',
               textAlign: TextAlign.center,
               style: const TextStyle(color: AppColors.muted, height: 1.45),
             ),
             const SizedBox(height: 22),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text(
-                existingParent ? 'Return to children' : 'Return to sign in',
+            if (signingIn)
+              const CircularProgressIndicator()
+            else ...[
+              if (signInError case final message?) ...[
+                _ErrorBanner(message: message),
+                const SizedBox(height: 16),
+              ],
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(
+                  existingParent ? 'Return to children' : 'Return to sign in',
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),

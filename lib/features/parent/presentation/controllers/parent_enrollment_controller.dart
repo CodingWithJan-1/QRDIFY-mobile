@@ -16,6 +16,7 @@ class ParentEnrollmentController extends SafeChangeNotifier {
   bool requiresSignIn = false;
   ParentInvitationChannel channel = ParentInvitationChannel.email;
   String? errorMessage;
+  ParentEnrollmentResult? result;
   String? _invitationToken;
   String? _verificationId;
 
@@ -61,7 +62,7 @@ class ParentEnrollmentController extends SafeChangeNotifier {
     errorMessage = null;
     notifyListeners();
     try {
-      await _repository.acceptInvitation(
+      result = await _repository.acceptInvitation(
         invitationToken: _invitationToken!,
         verificationId: _verificationId!,
         code: code,
@@ -93,6 +94,7 @@ class ParentEnrollmentController extends SafeChangeNotifier {
     step = ParentEnrollmentStep.invitation;
     requiresSignIn = false;
     errorMessage = null;
+    result = null;
     _invitationToken = null;
     _verificationId = null;
     channel = ParentInvitationChannel.email;

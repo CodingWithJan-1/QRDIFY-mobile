@@ -144,33 +144,124 @@ void main() {
     expect(find.text("You're all caught up"), findsOneWidget);
   });
 
-  testWidgets('accepts a Parent invitation from the sign-in screen', (
+  for (final identifier in ['parent@example.test', '+639387671972']) {
+    testWidgets('signs in a newly registered Parent using $identifier', (
+      tester,
+    ) async {
+      final repository = _FakeAuthRepository(loginSession: _parentSession);
+      final controller = AuthController(repository);
+      await tester.pumpWidget(
+        QrdifyApp(
+          dependencies: _dependencies(
+            controller,
+            parentEnrollmentRepository: _FakeParentEnrollmentRepository(
+              loginIdentifier: identifier,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _registerParent(tester, sms: identifier.startsWith('+'));
+
+      expect(repository.lastLoginIdentifier, identifier);
+      expect(repository.lastLoginPassword, 'StrongPassword123!');
+      expect(controller.status, AuthStatus.authenticated);
+      expect(find.text('Sample Child'), findsOneWidget);
+      expect(find.text('Add approved child'), findsOneWidget);
+      expect(find.text('Parent invitation'), findsNothing);
+      expect(find.text('Return to sign in'), findsNothing);
+    });
+  }
+
+  testWidgets(
+    'keeps account creation successful when automatic sign-in fails',
+    (tester) async {
+      final repository = _FakeAuthRepository(
+        loginError: const ApiException(
+          statusCode: 503,
+          message: 'Service unavailable.',
+        ),
+      );
+      final enrollment = _FakeParentEnrollmentRepository();
+      final controller = AuthController(repository);
+      await tester.pumpWidget(
+        QrdifyApp(
+          dependencies: _dependencies(
+            controller,
+            parentEnrollmentRepository: enrollment,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _registerParent(tester);
+
+      expect(find.text('Parent account created'), findsOneWidget);
+      expect(
+        find.textContaining('Automatic sign-in could not finish.'),
+        findsOneWidget,
+      );
+      expect(find.text('Create Parent account'), findsNothing);
+      expect(find.byType(TextFormField), findsNothing);
+      expect(enrollment.acceptCalls, 1);
+      await tester.tap(find.text('Return to sign in'));
+      await tester.pumpAndSettle();
+      expect(find.text('Welcome Back!'), findsOneWidget);
+      expect(enrollment.acceptCalls, 1);
+    },
+  );
+
+  testWidgets(
+    'supports registration against a backend without automatic sign-in',
+    (tester) async {
+      final repository = _FakeAuthRepository();
+      await tester.pumpWidget(
+        QrdifyApp(
+          dependencies: _dependencies(
+            AuthController(repository),
+            parentEnrollmentRepository: _FakeParentEnrollmentRepository(
+              loginIdentifier: null,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _registerParent(tester);
+
+      expect(repository.lastLoginIdentifier, isNull);
+      expect(find.text('Parent account created'), findsOneWidget);
+      expect(find.text('Return to sign in'), findsOneWidget);
+    },
+  );
+
+  testWidgets('adding a child preserves the existing Parent session', (
     tester,
   ) async {
-    final controller = AuthController(_FakeAuthRepository());
+    final repository = _FakeAuthRepository(restoredSession: _parentSession);
+    final controller = AuthController(repository);
     await tester.pumpWidget(QrdifyApp(dependencies: _dependencies(controller)));
     await tester.pumpAndSettle();
-
-    await tester.ensureVisible(find.text('Use a Parent invitation'));
-    await tester.tap(find.text('Use a Parent invitation'));
+    await tester.tap(find.text('Add approved child'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField), 'invitation-token');
     await tester.tap(find.text('Send verification code'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
-
-    await tester.enterText(find.byType(TextFormField).at(0), '123456');
-    await tester.enterText(find.byType(TextFormField).at(1), 'Sample Parent');
-    await tester.enterText(
-      find.byType(TextFormField).at(2),
-      'StrongPassword123!',
-    );
-    await tester.testTextInput.receiveAction(TextInputAction.done);
+    expect(find.byType(TextFormField), findsOneWidget);
+    await tester.enterText(find.byType(TextFormField), '123456');
+    await tester.ensureVisible(find.text('Add linked child'));
+    await tester.tap(find.text('Add linked child'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Parent account created'), findsOneWidget);
-    expect(find.text('Return to sign in'), findsOneWidget);
+    expect(find.text('Child added'), findsOneWidget);
+    expect(repository.lastLoginIdentifier, isNull);
+    expect(controller.session, same(_parentSession));
+    await tester.tap(find.text('Return to children'));
+    await tester.pumpAndSettle();
+    expect(find.text('Sample Child'), findsOneWidget);
   });
 
   testWidgets('briefly confirms that the Parent verification code was sent', (
@@ -353,6 +444,29 @@ void main() {
   });
 }
 
+Future<void> _registerParent(WidgetTester tester, {bool sms = false}) async {
+  await tester.ensureVisible(find.text('Use a Parent invitation'));
+  await tester.tap(find.text('Use a Parent invitation'));
+  await tester.pumpAndSettle();
+  if (sms) {
+    await tester.tap(find.text('SMS'));
+    await tester.pumpAndSettle();
+  }
+  await tester.enterText(find.byType(TextFormField), 'invitation-token');
+  await tester.tap(find.text('Send verification code'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Continue'));
+  await tester.pumpAndSettle();
+  await tester.enterText(find.byType(TextFormField).at(0), '123456');
+  await tester.enterText(find.byType(TextFormField).at(1), 'Sample Parent');
+  await tester.enterText(
+    find.byType(TextFormField).at(2),
+    'StrongPassword123!',
+  );
+  await tester.testTextInput.receiveAction(TextInputAction.done);
+  await tester.pumpAndSettle();
+}
+
 AppDependencies _dependencies(
   AuthController controller, {
   ParentEnrollmentRepository? parentEnrollmentRepository,
@@ -418,11 +532,17 @@ class _FakeAuthRepository implements AuthRepository {
     );
   }
 
-  _FakeAuthRepository({this.restoredSession, this.loginSession});
+  _FakeAuthRepository({
+    this.restoredSession,
+    this.loginSession,
+    this.loginError,
+  });
 
   final AuthSession? restoredSession;
   final AuthSession? loginSession;
+  final Object? loginError;
   String? lastLoginIdentifier;
+  String? lastLoginPassword;
   String? lastResetIdentifier;
 
   @override
@@ -434,6 +554,8 @@ class _FakeAuthRepository implements AuthRepository {
     required String password,
   }) async {
     lastLoginIdentifier = identifier;
+    lastLoginPassword = password;
+    if (loginError case final error?) throw error;
     return loginSession!;
   }
 
@@ -784,9 +906,14 @@ class _FakeParentRepository implements ParentRepository {
 }
 
 class _FakeParentEnrollmentRepository implements ParentEnrollmentRepository {
-  _FakeParentEnrollmentRepository({this.acceptError});
+  _FakeParentEnrollmentRepository({
+    this.acceptError,
+    this.loginIdentifier = 'parent@example.test',
+  });
 
   final Object? acceptError;
+  final String? loginIdentifier;
+  int acceptCalls = 0;
 
   @override
   Future<String> requestVerification({required String invitationToken}) async =>
@@ -801,7 +928,12 @@ class _FakeParentEnrollmentRepository implements ParentEnrollmentRepository {
     String? password,
     String? accessToken,
   }) async {
+    acceptCalls++;
     if (acceptError case final error?) throw error;
-    return const ParentEnrollmentResult(parentUserId: 201, studentId: 15);
+    return ParentEnrollmentResult(
+      parentUserId: 201,
+      studentId: 15,
+      loginIdentifier: loginIdentifier,
+    );
   }
 }

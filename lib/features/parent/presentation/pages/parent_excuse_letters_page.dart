@@ -117,27 +117,33 @@ class _ParentExcuseLettersPageState extends State<ParentExcuseLettersPage> {
     ),
     child: Padding(
       padding: const EdgeInsets.all(16),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Icon(Icons.edit_document, color: AppColors.blue, size: 27),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Submit an excuse letter',
-                  style: TextStyle(fontWeight: FontWeight.w800),
+          const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.edit_document, color: AppColors.blue, size: 27),
+              SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Submit an excuse letter',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      'It will go to this child’s section adviser.',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ],
                 ),
-                SizedBox(height: 3),
-                Text(
-                  'It will go to this child’s section adviser.',
-                  style: TextStyle(fontSize: 12),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
+          const SizedBox(height: 16),
           FilledButton(
             onPressed: _submitting ? null : _openForm,
             child: const Text('Create'),
@@ -236,11 +242,8 @@ class _ParentExcuseLettersPageState extends State<ParentExcuseLettersPage> {
   }
 
   Future<void> _openForm() async {
-    final submitted = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (_) => _ExcuseLetterForm(onSubmit: _submit),
+    final submitted = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => _ExcuseLetterForm(onSubmit: _submit)),
     );
     if (submitted != true || !mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -309,6 +312,8 @@ class _ExcuseLetterFormState extends State<_ExcuseLetterForm> {
   DateTime? _date;
   PrivatePickedFile? _attachment;
   bool _saving = false;
+  bool _pickingAttachment = false;
+  String? _dateError;
   String? _attachmentError;
 
   @override
@@ -319,78 +324,143 @@ class _ExcuseLetterFormState extends State<_ExcuseLetterForm> {
   }
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-    child: Scaffold(
-      appBar: AppBar(
-        title: const Text('New excuse letter'),
-        leading: IconButton(
-          onPressed: _saving ? null : () => Navigator.pop(context),
-          icon: const Icon(Icons.close),
-        ),
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: const Text('New excuse letter'),
+      leading: IconButton(
+        onPressed: _saving ? null : () => Navigator.pop(context),
+        icon: const Icon(Icons.close),
       ),
-      body: Form(
-        key: _key,
-        child: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            _textField(_title, 'Title', 'e.g. Fever and colds'),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: _saving ? null : _pickDate,
-              icon: const Icon(Icons.calendar_month_outlined),
-              label: Text(
-                _date == null
-                    ? 'Choose absence date'
-                    : _date!.toLocal().toString().split(' ').first,
-              ),
+    ),
+    body: Form(
+      key: _key,
+      child: ListView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: const EdgeInsets.all(20),
+        children: [
+          _textField(_title, 'Title', 'e.g. Fever and colds'),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: _saving ? null : _pickDate,
+            icon: const Icon(Icons.calendar_month_outlined),
+            label: Text(
+              _date == null
+                  ? 'Choose absence date'
+                  : _date!.toLocal().toString().split(' ').first,
             ),
-            const SizedBox(height: 16),
-            _textField(
-              _reason,
-              'Reason',
-              'Explain the reason for the absence',
-              maxLines: 5,
-            ),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: _saving ? null : _pickAttachment,
-              icon: const Icon(Icons.attach_file_rounded),
-              label: Text(
-                _attachment?.name ?? 'Attach supporting file (optional)',
-              ),
-            ),
-            if (_attachmentError != null) ...[
-              const SizedBox(height: 6),
-              Text(
-                _attachmentError!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ],
+          ),
+          if (_dateError != null) ...[
             const SizedBox(height: 6),
-            const Text(
-              'JPG, PNG, or PDF up to 5 MiB.',
-              style: TextStyle(color: AppColors.muted, fontSize: 12),
-            ),
-            const SizedBox(height: 24),
-            FilledButton.icon(
-              onPressed: _saving ? null : _save,
-              icon: _saving
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(Icons.send_rounded),
-              label: Text(_saving ? 'Sending…' : 'Send to adviser'),
+            Text(
+              _dateError!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           ],
-        ),
+          const SizedBox(height: 16),
+          _textField(
+            _reason,
+            'Reason',
+            'Explain the reason for the absence',
+            maxLines: 5,
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: _saving || _pickingAttachment ? null : _pickAttachment,
+            icon: const Icon(Icons.attach_file_rounded),
+            label: Text(
+              _pickingAttachment
+                  ? 'Opening file…'
+                  : _attachment == null
+                  ? 'Attach supporting file (optional)'
+                  : 'Replace attachment',
+            ),
+          ),
+          if (_attachment case final file?) ...[
+            const SizedBox(height: 12),
+            _attachmentPreview(file),
+          ],
+          if (_attachmentError != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              _attachmentError!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ],
+          const SizedBox(height: 6),
+          const Text(
+            'JPG, PNG, or PDF up to 5 MiB.',
+            style: TextStyle(color: AppColors.muted, fontSize: 12),
+          ),
+          const SizedBox(height: 24),
+          FilledButton.icon(
+            onPressed: _saving || _pickingAttachment ? null : _save,
+            icon: _saving
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.send_rounded),
+            label: Text(_saving ? 'Sending…' : 'Send to adviser'),
+          ),
+        ],
       ),
     ),
   );
+
+  Widget _attachmentPreview(PrivatePickedFile file) {
+    final isImage = const [
+      'jpg',
+      'jpeg',
+      'png',
+    ].contains(file.name.split('.').last.toLowerCase());
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (isImage)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: ColoredBox(
+              color: ParentDesign.softBlue,
+              child: Image.memory(
+                file.bytes,
+                key: ValueKey(file),
+                height: 200,
+                fit: BoxFit.contain,
+                cacheWidth: 1200,
+                semanticLabel: 'Selected supporting image',
+                errorBuilder: (_, _, _) => const SizedBox(
+                  height: 100,
+                  child: Center(child: Text('Image preview unavailable')),
+                ),
+              ),
+            ),
+          ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(
+            isImage ? Icons.image_outlined : Icons.picture_as_pdf_outlined,
+          ),
+          title: Text(file.name, maxLines: 2, overflow: TextOverflow.ellipsis),
+          subtitle: Text(
+            '${isImage ? 'Image' : 'PDF document'} • ${(file.bytes.length / 1024).ceil()} KB',
+          ),
+          trailing: IconButton(
+            tooltip: 'Remove attachment',
+            onPressed: _saving || _pickingAttachment
+                ? null
+                : () => setState(() {
+                    _attachment = null;
+                    _attachmentError = null;
+                  }),
+            icon: const Icon(Icons.close_rounded),
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _textField(
     TextEditingController controller,
@@ -399,6 +469,7 @@ class _ExcuseLetterFormState extends State<_ExcuseLetterForm> {
     int maxLines = 1,
   }) => TextFormField(
     controller: controller,
+    enabled: !_saving,
     maxLines: maxLines,
     maxLength: label == 'Title' ? 120 : 5000,
     validator: (value) => value == null || value.trim().isEmpty
@@ -412,6 +483,7 @@ class _ExcuseLetterFormState extends State<_ExcuseLetterForm> {
   );
 
   Future<void> _pickDate() async {
+    FocusScope.of(context).unfocus();
     final now = DateTime.now();
     final date = await showDatePicker(
       context: context,
@@ -419,10 +491,18 @@ class _ExcuseLetterFormState extends State<_ExcuseLetterForm> {
       firstDate: DateTime(now.year - 2),
       lastDate: now,
     );
-    if (date != null && mounted) setState(() => _date = date);
+    if (date != null && mounted) {
+      setState(() {
+        _date = date;
+        _dateError = null;
+      });
+    }
   }
 
   Future<void> _pickAttachment() async {
+    if (_pickingAttachment || _saving) return;
+    FocusScope.of(context).unfocus();
+    setState(() => _pickingAttachment = true);
     try {
       final file = await PrivateFilePicker.pickFile(
         maxBytes: 5 * 1024 * 1024,
@@ -436,29 +516,28 @@ class _ExcuseLetterFormState extends State<_ExcuseLetterForm> {
     } on FormatException catch (error) {
       if (mounted) {
         setState(() {
-          _attachment = null;
           _attachmentError = error.message;
         });
       }
     } on Object {
       if (mounted) {
         setState(() {
-          _attachment = null;
           _attachmentError = 'Could not read the selected file.';
         });
       }
+    } finally {
+      if (mounted) setState(() => _pickingAttachment = false);
     }
   }
 
   Future<void> _save() async {
-    if (!_key.currentState!.validate() ||
-        _date == null ||
-        _attachmentError != null) {
-      if (_date == null) {
-        setState(() => _attachmentError = 'Choose the date of absence.');
-      }
-      return;
-    }
+    if (_saving || _pickingAttachment) return;
+    FocusScope.of(context).unfocus();
+    final valid = _key.currentState!.validate();
+    setState(
+      () => _dateError = _date == null ? 'Choose the date of absence.' : null,
+    );
+    if (!valid || _date == null || _attachmentError != null) return;
     setState(() => _saving = true);
     final submitted = await widget.onSubmit(
       title: _title.text.trim(),
