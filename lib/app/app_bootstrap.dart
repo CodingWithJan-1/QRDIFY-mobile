@@ -1,3 +1,4 @@
+import '../features/notifications/data/mobile_push_service.dart';
 import '../core/config/app_config.dart';
 import '../core/network/api_client.dart';
 import '../core/storage/secure_session_store.dart';
@@ -58,6 +59,11 @@ abstract final class AppBootstrap {
         apiClient,
         config.useMobileApi,
       ),
+      mobilePushService: MobilePushService(
+        apiClient,
+        sessionStore,
+        useMobileApi: config.useMobileApi,
+      ),
       notificationRepository: NotificationRepositoryImpl(
         apiClient,
         config.useMobileApi,
@@ -81,6 +87,7 @@ class AppDependencies {
     required this.deviceLocationService,
     required this.excuseLetterRepository,
     required this.notificationRepository,
+    this.mobilePushService,
     required this.parentRepository,
     required this.parentEnrollmentRepository,
   });
@@ -93,6 +100,7 @@ class AppDependencies {
   final DeviceLocationService deviceLocationService;
   final ExcuseLetterRepository excuseLetterRepository;
   final NotificationRepository notificationRepository;
+  final MobilePushService? mobilePushService;
   final ParentRepository parentRepository;
   final ParentEnrollmentRepository parentEnrollmentRepository;
 }

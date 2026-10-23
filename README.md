@@ -2,6 +2,23 @@
 
 Flutter client for the QRDify Student and Parent modules.
 
+## Mobile alerts
+
+Parent attendance and excuse-decision alerts now use a child-scoped inbox, with
+refresh on resume, push receipt, and every 15 seconds while visible. Android
+banners require the matching backend migration and Firebase push configuration.
+The backend rollout notes are in `docs/mobile-alerts-implementation.md` in the
+`qrdifyv2` backend repository.
+
+Release builds use the Firebase Android app `online.qridify.twces` in project
+`qrdify-web`. Supply the ignored `android/app/google-services.json` on the build
+machine; never include private service-account credentials in the app. The
+`.local` debug package currently supports the inbox without native push.
+
+The verified release candidate is `1.1.4+6`;
+the public landing-page download remains `1.1.3+5` until backend rollout and device
+notification checks are complete.
+
 ## Visual identity
 
 The mobile interface follows the existing TWCES web application. It uses the

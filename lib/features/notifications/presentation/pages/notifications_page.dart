@@ -1,3 +1,7 @@
+import 'dart:async';
+
+import '../../domain/notification_signals.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
@@ -14,6 +18,7 @@ class NotificationsPage extends StatefulWidget {
     required this.accessToken,
     required this.repository,
     this.parentStyle = false,
+    this.isActive = true,
     this.child,
     this.onChangeChild,
     super.key,
@@ -22,6 +27,7 @@ class NotificationsPage extends StatefulWidget {
   final String accessToken;
   final NotificationRepository repository;
   final bool parentStyle;
+  final bool isActive;
   final ParentChild? child;
   final VoidCallback? onChangeChild;
 
@@ -29,21 +35,49 @@ class NotificationsPage extends StatefulWidget {
   State<NotificationsPage> createState() => _NotificationsPageState();
 }
 
-class _NotificationsPageState extends State<NotificationsPage> {
+class _NotificationsPageState extends State<NotificationsPage>
+    with WidgetsBindingObserver {
   late final NotificationController _controller;
+  Timer? _poll;
+  bool _resumed = true;
   _NotificationFilter _filter = _NotificationFilter.all;
 
   @override
   void initState() {
     super.initState();
-    _controller = NotificationController(widget.repository, widget.accessToken)
-      ..load();
+    _controller = NotificationController(
+      widget.repository,
+      widget.accessToken,
+      childId: widget.child?.id,
+    )..load();
+    WidgetsBinding.instance.addObserver(this);
+    NotificationSignals.refresh.addListener(_refresh);
+    _poll = Timer.periodic(const Duration(seconds: 15), (_) => _refresh());
   }
 
   @override
   void dispose() {
+    _poll?.cancel();
+    NotificationSignals.refresh.removeListener(_refresh);
+    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     super.dispose();
+  }
+
+  void _refresh() {
+    if (widget.isActive && _resumed) unawaited(_controller.load(refresh: true));
+  }
+
+  @override
+  void didUpdateWidget(covariant NotificationsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) _refresh();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _resumed = state == AppLifecycleState.resumed;
+    if (_resumed) _refresh();
   }
 
   @override
@@ -90,8 +124,21 @@ class _NotificationsPageState extends State<NotificationsPage> {
           return RefreshIndicator(
             onRefresh: () => _controller.load(refresh: true),
             child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(20),
               children: [
+                ValueListenableBuilder<String?>(
+                  valueListenable: NotificationSignals.pushStatus,
+                  builder: (_, status, _) => status == null
+                      ? const SizedBox.shrink()
+                      : Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Text(
+                            status,
+                            style: const TextStyle(color: AppColors.muted),
+                          ),
+                        ),
+                ),
                 SegmentedButton<_NotificationFilter>(
                   style: widget.parentStyle
                       ? ButtonStyle(
@@ -113,7 +160,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                   segments: [
                     ButtonSegment(
                       value: _NotificationFilter.all,
-                      label: Text('All (${_controller.items.length})'),
+                      label: Text('All (${_controller.totalCount})'),
                     ),
                     ButtonSegment(
                       value: _NotificationFilter.unread,
@@ -122,7 +169,13 @@ class _NotificationsPageState extends State<NotificationsPage> {
                   ],
                   selected: {_filter},
                   onSelectionChanged: (selection) {
+                    if (_controller.isWorking || _controller.isLoading) return;
                     setState(() => _filter = selection.first);
+                    unawaited(
+                      _controller.setUnreadOnly(
+                        selection.first == _NotificationFilter.unread,
+                      ),
+                    );
                   },
                 ),
                 if (_controller.errorMessage case final message?) ...[
@@ -244,7 +297,7 @@ class _NotificationCard extends StatelessWidget {
           ),
         ),
         subtitle: Text(
-          '${item.message}\n${_relativeTime(item.createdAt)}',
+          '${item.childName == null ? '' : '${item.childName} ? '}${item.message}\n${_relativeTime(item.occurredAt ?? item.createdAt)}',
           maxLines: 3,
           overflow: TextOverflow.ellipsis,
         ),

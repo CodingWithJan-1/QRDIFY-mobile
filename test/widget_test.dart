@@ -630,6 +630,8 @@ class _FakeStudentAttendanceRepository implements StudentAttendanceRepository {
     required String accessToken,
     int page = 1,
     int perPage = 20,
+    int? childId,
+    bool unreadOnly = false,
   }) async {
     return const StudentAttendanceResult(
       summary: AttendanceRecordSummary(
@@ -799,6 +801,8 @@ class _FakeNotificationRepository implements NotificationRepository {
     required String accessToken,
     int page = 1,
     int perPage = 20,
+    int? childId,
+    bool unreadOnly = false,
   }) async =>
       const NotificationPageResult(items: [], currentPage: 1, lastPage: 1);
 
@@ -809,7 +813,7 @@ class _FakeNotificationRepository implements NotificationRepository {
   }) async {}
 
   @override
-  Future<void> markAllRead({required String accessToken}) async {}
+  Future<void> markAllRead({required String accessToken, int? childId}) async {}
 
   @override
   Future<void> deleteNotification({

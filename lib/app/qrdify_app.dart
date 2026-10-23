@@ -33,6 +33,7 @@ class _QrdifyAppState extends State<QrdifyApp> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     widget.dependencies.authController.removeListener(_onAuthChanged);
+    widget.dependencies.mobilePushService?.dispose();
     widget.dependencies.authController.dispose();
     super.dispose();
   }
@@ -40,6 +41,11 @@ class _QrdifyAppState extends State<QrdifyApp> with WidgetsBindingObserver {
   void _onAuthChanged() {
     final session = widget.dependencies.authController.session;
     final token = session?.accessToken;
+    unawaited(
+      widget.dependencies.mobilePushService?.updateSession(
+        widget.dependencies.authController.mustChangePassword ? null : session,
+      ),
+    );
     if (token != _lastToken ||
         widget.dependencies.authController.mustChangePassword) {
       _lastToken = token;
@@ -58,6 +64,7 @@ class _QrdifyAppState extends State<QrdifyApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(widget.dependencies.authController.revalidateSession());
+      unawaited(widget.dependencies.mobilePushService?.resume());
     }
   }
 

@@ -3,14 +3,19 @@ class NotificationPageResult {
     required this.items,
     required this.currentPage,
     required this.lastPage,
+    this.totalCount,
+    this.unreadCount,
   });
 
   factory NotificationPageResult.fromJson(Map<String, dynamic> json) {
     final meta = _map(json['meta']);
     final values = json['data'];
-    final items = values is List
-        ? values.map((item) => AppNotification.fromJson(_map(item))).toList()
-        : const <AppNotification>[];
+    if (values is! List) {
+      throw const FormatException('Missing notifications list.');
+    }
+    final items = values
+        .map((item) => AppNotification.fromJson(_map(item)))
+        .toList();
     return NotificationPageResult(
       items: items,
       currentPage: _integer(
@@ -18,12 +23,18 @@ class NotificationPageResult {
         fallback: 1,
       ),
       lastPage: _integer(meta['last_page'] ?? json['last_page'], fallback: 1),
+      totalCount:
+          (json['total_count'] as num?)?.toInt() ??
+          (json['total'] as num?)?.toInt(),
+      unreadCount: (json['unread_count'] as num?)?.toInt(),
     );
   }
 
   final List<AppNotification> items;
   final int currentPage;
   final int lastPage;
+  final int? totalCount;
+  final int? unreadCount;
 }
 
 class AppNotification {
@@ -34,12 +45,18 @@ class AppNotification {
     required this.message,
     required this.createdAt,
     this.readAt,
+    this.childId,
+    this.childName,
+    this.occurredAt,
   });
 
   factory AppNotification.fromJson(Map<String, dynamic> json) {
     final data = _map(json['data']);
     return AppNotification(
       id: '${json['id'] ?? ''}',
+      childId: (data['student_id'] as num?)?.toInt(),
+      childName: data['student_name'] as String?,
+      occurredAt: DateTime.tryParse('${data['occurred_at'] ?? ''}'),
       type: '${data['type'] ?? json['type'] ?? 'general'}',
       title: '${data['title'] ?? json['title'] ?? 'Notification'}',
       message:
@@ -57,11 +74,17 @@ class AppNotification {
   final String message;
   final DateTime? createdAt;
   final DateTime? readAt;
+  final int? childId;
+  final String? childName;
+  final DateTime? occurredAt;
 
   bool get isRead => readAt != null;
 
   AppNotification markRead() => AppNotification(
     id: id,
+    childId: childId,
+    childName: childName,
+    occurredAt: occurredAt,
     type: type,
     title: title,
     message: message,

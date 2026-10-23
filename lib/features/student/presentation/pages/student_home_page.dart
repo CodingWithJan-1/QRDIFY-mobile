@@ -1,3 +1,5 @@
+import '../../../notifications/domain/notification_signals.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -63,6 +65,8 @@ class _StudentHomePageState extends State<StudentHomePage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    NotificationSignals.openRequest.addListener(_openRequestedAlert);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _openRequestedAlert());
     _controller = StudentDashboardController(
       widget.dashboardRepository,
       widget.accessToken,
@@ -92,6 +96,7 @@ class _StudentHomePageState extends State<StudentHomePage>
 
   @override
   void dispose() {
+    NotificationSignals.openRequest.removeListener(_openRequestedAlert);
     WidgetsBinding.instance.removeObserver(this);
     _locationController.dispose();
     _controller.dispose();
@@ -110,7 +115,9 @@ class _StudentHomePageState extends State<StudentHomePage>
           index: _selectedTab,
           children: List.generate(
             _tabs.length,
-            (index) => _tabs[index] ?? const SizedBox.shrink(),
+            (index) => index == 4 && _tabs[index] != null
+                ? _buildTab(4)
+                : _tabs[index] ?? const SizedBox.shrink(),
           ),
         ),
         bottomNavigationBar: NavigationBar(
@@ -179,11 +186,23 @@ class _StudentHomePageState extends State<StudentHomePage>
       repository: widget.excuseLetterRepository,
     ),
     4 => NotificationsPage(
+      isActive: _selectedTab == 4,
       accessToken: widget.accessToken,
       repository: widget.notificationRepository,
     ),
     _ => const SizedBox.shrink(),
   };
+
+  void _openRequestedAlert() {
+    final request = NotificationSignals.openRequest.value;
+    if (!mounted ||
+        request == null ||
+        '${request['user_id']}' != '${widget.user.id}') {
+      return;
+    }
+    NotificationSignals.openRequest.value = null;
+    _selectTab(4);
+  }
 
   void _selectTab(int index) {
     if (index == _selectedTab) return;

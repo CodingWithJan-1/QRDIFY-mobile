@@ -1,3 +1,5 @@
+import '../../../notifications/domain/notification_signals.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -56,11 +58,13 @@ class _ParentHomePageState extends State<ParentHomePage> {
       widget.accessToken,
     )..addListener(_handleControllerChanged);
     _tabs = List<Widget?>.filled(4, null);
+    NotificationSignals.openRequest.addListener(_openRequestedAlert);
     unawaited(_loadInitialData());
   }
 
   @override
   void dispose() {
+    NotificationSignals.openRequest.removeListener(_openRequestedAlert);
     _controller.removeListener(_handleControllerChanged);
     _controller.dispose();
     super.dispose();
@@ -84,7 +88,9 @@ class _ParentHomePageState extends State<ParentHomePage> {
                 index: _selectedTab,
                 children: List.generate(
                   _tabs.length,
-                  (index) => _tabs[index] ?? const SizedBox.shrink(),
+                  (index) => index == 3 && _tabs[index] != null
+                      ? _buildTab(3)
+                      : _tabs[index] ?? const SizedBox.shrink(),
                 ),
               )
             : _buildChildren(),
@@ -161,6 +167,8 @@ class _ParentHomePageState extends State<ParentHomePage> {
         onChangeChild: _returnToChildren,
       ),
       3 => NotificationsPage(
+        key: ValueKey('alerts-${child?.id}'),
+        isActive: _selectedTab == 3,
         accessToken: widget.accessToken,
         repository: widget.notificationRepository,
         parentStyle: true,
@@ -206,6 +214,29 @@ class _ParentHomePageState extends State<ParentHomePage> {
 
   Future<void> _loadInitialData() async {
     await _controller.load();
+    _openRequestedAlert();
+  }
+
+  void _openRequestedAlert() {
+    final request = NotificationSignals.openRequest.value;
+    if (!mounted ||
+        request == null ||
+        '${request['user_id']}' != '${widget.user.id}' ||
+        _controller.isLoading) {
+      return;
+    }
+    if (_controller.children.isEmpty) return;
+    NotificationSignals.openRequest.value = null;
+    final studentId = int.tryParse('${request['student_id']}');
+    final matching = _controller.children.where((c) => c.id == studentId);
+    if (studentId != null && matching.isEmpty) return;
+    final child = matching.isNotEmpty
+        ? matching.first
+        : _controller.selectedChild ?? _controller.children.first;
+    unawaited(() async {
+      await _selectChild(child);
+      if (mounted) _selectTab(3);
+    }());
   }
 
   Future<void> _openEnrollment() async {

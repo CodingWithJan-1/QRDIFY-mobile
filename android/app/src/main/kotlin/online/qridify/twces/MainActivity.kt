@@ -1,5 +1,6 @@
 package online.qridify.twces
 
+import android.content.Intent
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -9,6 +10,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 
 class MainActivity : FlutterActivity() {
+    private var alerts: AlertNotifications? = null
     private var notificationResult: MethodChannel.Result? = null
     private val notificationRequestCode = 7019
 
@@ -26,6 +28,7 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        alerts = AlertNotifications(this, MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "online.qridify.twces/alerts"))
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "online.qridify.twces/security")
             .setMethodCallHandler { call, result ->
                 val preferences = getSharedPreferences("session_security", MODE_PRIVATE)
@@ -68,6 +71,11 @@ class MainActivity : FlutterActivity() {
             notificationResult?.success(notificationsEnabled())
             notificationResult = null
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        alerts?.capture(intent)
     }
 
     override fun onDestroy() {

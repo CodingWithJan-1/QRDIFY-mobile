@@ -15,6 +15,10 @@ val keystoreProperties = Properties().apply {
 val releaseBuildRequested = gradle.startParameter.taskNames.any {
     it.contains("release", ignoreCase = true)
 }
+// Production Firebase config belongs to this package; the .local debug app is separate.
+if (releaseBuildRequested && file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
 val requiredSigningKeys = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
 if (releaseBuildRequested &&
     (!keystorePropertiesFile.exists() || requiredSigningKeys.any { keystoreProperties.getProperty(it).isNullOrBlank() })
