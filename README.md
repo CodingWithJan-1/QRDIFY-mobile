@@ -11,11 +11,15 @@ The backend rollout notes are in `docs/mobile-alerts-implementation.md` in the
 `qrdifyv2` backend repository.
 
 Release builds use the Firebase Android app `online.qridify.twces` in project
-`qrdify-web`. Supply the ignored `android/app/google-services.json` on the build
+`qrdify-1ed08`. Supply the ignored `android/app/google-services.json` on the build
 machine; never include private service-account credentials in the app. The
 `.local` debug package currently supports the inbox without native push.
 
-The verified release candidate is `1.1.4+6`;
+The current source version is `1.1.6+8`, aligning Android push with the production
+Firebase project. It retains AM/PM attendance displays, half-day labels, red
+unread indicators, and explicit Android alert sounds.
+See [the mobile attendance and alerts handoff](docs/mobile-attendance-alerts.md)
+for backend response requirements and device checks. The previous release candidate was `1.1.4+6`;
 the public landing-page download remains `1.1.3+5` until backend rollout and device
 notification checks are complete.
 
@@ -138,9 +142,8 @@ See `development-report.md` for the current access and setup blockers.
 
 ## Android production build
 
-Current release: **1.1.3 (build 5)**. This release includes automatic sign-in after
-parent registration and the parent excuse form layout, keyboard, and image
-preview fixes.
+Current source version: **1.1.6 (build 8)**. The public download remains
+**1.1.3 (build 5)** until the new build and matching backend are released.
 
 The production application ID is `online.qridify.twces`. Release builds refuse
 to use Flutter's debug key.

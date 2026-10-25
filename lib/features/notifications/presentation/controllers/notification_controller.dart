@@ -3,6 +3,7 @@ import '../../../../core/state/safe_change_notifier.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../domain/app_notification.dart';
 import '../../domain/notification_repository.dart';
+import '../../domain/notification_signals.dart';
 
 class NotificationController extends SafeChangeNotifier {
   NotificationController(this._repository, this._accessToken, {this.childId});
@@ -117,6 +118,7 @@ class NotificationController extends SafeChangeNotifier {
             if (item.id == notification.id) item.markRead() else item,
       ];
       _serverUnreadCount = count > 0 ? count - 1 : 0;
+      NotificationSignals.changed();
       notifyListeners();
       return true;
     } catch (error) {
@@ -142,6 +144,7 @@ class NotificationController extends SafeChangeNotifier {
       );
       items = unreadOnly ? [] : items.map((item) => item.markRead()).toList();
       _serverUnreadCount = 0;
+      NotificationSignals.changed();
       if (unreadOnly) {
         _currentPage = 1;
         _lastPage = 1;
@@ -173,6 +176,7 @@ class NotificationController extends SafeChangeNotifier {
       if (_totalCount != null && _totalCount! > 0) {
         _totalCount = _totalCount! - 1;
       }
+      NotificationSignals.changed();
       return true;
     } catch (error) {
       errorMessage = _messageFor(error);

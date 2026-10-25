@@ -16,6 +16,8 @@ import 'package:qrdify/features/notifications/domain/notification_repository.dar
 import 'package:qrdify/features/notifications/domain/notification_signals.dart';
 import 'package:qrdify/features/notifications/presentation/controllers/notification_controller.dart';
 import 'package:qrdify/features/notifications/presentation/pages/notifications_page.dart';
+import 'package:qrdify/features/notifications/presentation/widgets/notification_badge.dart';
+import 'package:qrdify/core/theme/app_theme.dart';
 
 const unread = AppNotification(
   id: 'new',
@@ -29,6 +31,129 @@ void main() {
   setUp(() {
     NotificationSignals.openRequest.value = null;
     NotificationSignals.pushStatus.value = null;
+  });
+
+  testWidgets('unread badge refreshes after reads without opening the inbox', (
+    tester,
+  ) async {
+    final repo = _Repository()
+      ..page = const NotificationPageResult(
+        items: [unread],
+        currentPage: 1,
+        lastPage: 2,
+        unreadCount: 4,
+      );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: NotificationBadge(
+            repository: repo,
+            accessToken: 'session',
+            childId: 42,
+            child: const Icon(Icons.notifications),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.widget<Badge>(find.byType(Badge)).isLabelVisible, isTrue);
+    expect(
+      tester.widget<Badge>(find.byType(Badge)).backgroundColor,
+      AppColors.danger,
+    );
+    expect(repo.lastChild, 42);
+    expect(repo.lastUnreadOnly, isTrue);
+
+    final controller = NotificationController(repo, 'session', childId: 42);
+    await controller.load();
+    repo.page = const NotificationPageResult(
+      items: [],
+      currentPage: 1,
+      lastPage: 1,
+      unreadCount: 3,
+    );
+    await controller.markRead(unread);
+    await tester.pumpAndSettle();
+    expect(tester.widget<Badge>(find.byType(Badge)).isLabelVisible, isTrue);
+
+    repo.page = const NotificationPageResult(
+      items: [],
+      currentPage: 1,
+      lastPage: 1,
+      unreadCount: 0,
+    );
+    await controller.markAllRead();
+    await tester.pumpAndSettle();
+    expect(tester.widget<Badge>(find.byType(Badge)).isLabelVisible, isFalse);
+    controller.dispose();
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('a previous child response cannot restore its unread badge', (
+    tester,
+  ) async {
+    final pending = Completer<NotificationPageResult>();
+    final repo = _Repository()..pending = pending;
+    Widget badge(int childId) => MaterialApp(
+      home: Scaffold(
+        body: NotificationBadge(
+          repository: repo,
+          accessToken: 'session',
+          childId: childId,
+          child: const Icon(Icons.notifications),
+        ),
+      ),
+    );
+    await tester.pumpWidget(badge(42));
+    repo.pending = null;
+    await tester.pumpWidget(badge(43));
+    await tester.pumpAndSettle();
+    pending.complete(
+      const NotificationPageResult(
+        items: [unread],
+        currentPage: 1,
+        lastPage: 1,
+        unreadCount: 1,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.widget<Badge>(find.byType(Badge)).isLabelVisible, isFalse);
+    expect(repo.lastChild, 43);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('badge polls only while resumed and reacts to incoming alerts', (
+    tester,
+  ) async {
+    final repo = _Repository();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: NotificationBadge(
+            repository: repo,
+            accessToken: 'session',
+            child: const Icon(Icons.notifications),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    repo.page = const NotificationPageResult(
+      items: [unread],
+      currentPage: 1,
+      lastPage: 1,
+    );
+    NotificationSignals.received();
+    await tester.pumpAndSettle();
+    expect(tester.widget<Badge>(find.byType(Badge)).isLabelVisible, isTrue);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    final before = repo.fetchCalls;
+    await tester.pump(const Duration(seconds: 16));
+    expect(repo.fetchCalls, before);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(repo.fetchCalls, greaterThan(before));
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 
   test(

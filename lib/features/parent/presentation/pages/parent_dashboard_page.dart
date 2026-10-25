@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../shared/domain/attendance_sessions.dart';
 import '../controllers/parent_home_controller.dart';
 import '../widgets/parent_design.dart';
 
@@ -61,9 +62,12 @@ class ParentDashboardPage extends StatelessWidget {
                 const ParentSectionLabel("Today's status"),
                 const SizedBox(height: 14),
                 _TodayStatus(
-                  status: dashboard.todayStatus,
+                  status: dashboard.todaySessions.dayStatus(
+                    dashboard.todayStatus,
+                  ),
                   timeIn: dashboard.todayTimeIn,
                   timeOut: dashboard.todayTimeOut,
+                  sessions: dashboard.todaySessions,
                 ),
                 const Divider(height: 36),
                 const ParentSectionLabel('Attendance summary'),
@@ -100,6 +104,13 @@ class ParentDashboardPage extends StatelessWidget {
                       icon: Icons.description_outlined,
                       color: AppColors.blue,
                     ),
+                    if (dashboard.halfDay > 0)
+                      _CountCard(
+                        label: 'Half-day',
+                        value: dashboard.halfDay,
+                        icon: Icons.timelapse,
+                        color: Colors.deepOrange,
+                      ),
                   ],
                 ),
                 if (!dashboard.summaryComplete) ...[
@@ -122,11 +133,13 @@ class _TodayStatus extends StatelessWidget {
     required this.status,
     required this.timeIn,
     required this.timeOut,
+    required this.sessions,
   });
 
   final String status;
   final String? timeIn;
   final String? timeOut;
+  final AttendanceSessions sessions;
 
   bool get hasAttendanceTime => timeIn != null || timeOut != null;
 
@@ -155,7 +168,7 @@ class _TodayStatus extends StatelessWidget {
                 Text(
                   status == 'pending' && !hasAttendanceTime
                       ? 'Awaiting attendance'
-                      : _sentenceCase(status),
+                      : attendanceStatusLabel(status),
                   style: const TextStyle(
                     color: ParentDesign.deepInk,
                     fontSize: 22,
@@ -166,8 +179,15 @@ class _TodayStatus extends StatelessWidget {
                 if (!hasAttendanceTime) ...[
                   const SizedBox(height: 4),
                   const Text(
-                    'No attendance recorded yet today.',
+                    'No gate scans recorded.',
                     style: TextStyle(color: AppColors.muted, height: 1.35),
+                  ),
+                ],
+                if (sessions.hasDetails) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    sessions.description,
+                    style: const TextStyle(color: AppColors.muted),
                   ),
                 ],
                 if (timeIn != null || timeOut != null) ...[
@@ -292,10 +312,6 @@ class _InformationNote extends StatelessWidget {
     );
   }
 }
-
-String _sentenceCase(String value) => value.isEmpty
-    ? 'Pending'
-    : '${value[0].toUpperCase()}${value.substring(1)}';
 
 String _formatAttendanceTime(String value) {
   final timestamp = DateTime.tryParse(value);

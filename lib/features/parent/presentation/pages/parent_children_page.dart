@@ -17,6 +17,7 @@ class ParentChildrenPage extends StatelessWidget {
     required this.onAddChild,
     required this.onLogout,
     required this.onProfile,
+    this.notificationAction,
     super.key,
   });
 
@@ -26,6 +27,7 @@ class ParentChildrenPage extends StatelessWidget {
   final VoidCallback onAddChild;
   final Future<void> Function() onLogout;
   final VoidCallback onProfile;
+  final Widget? notificationAction;
 
   @override
   Widget build(BuildContext context) {
@@ -50,6 +52,7 @@ class ParentChildrenPage extends StatelessWidget {
           ],
         ),
         actions: [
+          ?notificationAction,
           PopupMenuButton<_ParentAction>(
             tooltip: 'Account menu',
             onSelected: (action) {

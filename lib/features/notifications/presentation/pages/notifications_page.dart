@@ -289,7 +289,14 @@ class _NotificationCard extends StatelessWidget {
       child: ListTile(
         onTap: onTap,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: CircleAvatar(child: Icon(_iconFor(item.type))),
+        leading: Semantics(
+          label: item.isRead ? 'Read notification' : 'Unread notification',
+          child: Badge(
+            isLabelVisible: !item.isRead,
+            backgroundColor: AppColors.danger,
+            child: CircleAvatar(child: Icon(_iconFor(item.type))),
+          ),
+        ),
         title: Text(
           item.title,
           style: TextStyle(

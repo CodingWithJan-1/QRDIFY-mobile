@@ -54,6 +54,7 @@ app.*.map.json
 !.env.example
 **/key.properties
 **/google-services.json
+**/*firebase-adminsdk*.json
 **/*.jks
 **/*.keystore
 **/*.pem
@@ -77,3 +78,6 @@ app.*.map.json
 /MOBILE_SECURITY_AUDIT.md
 /MOBILE_SECURITY_IMPLEMENTATION.md
 /security-audit/
+
+# Attendance test phone number, account manifests, and run reports
+/tool/.attendance-lab/

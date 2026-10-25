@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../shared/domain/attendance_sessions.dart';
+
 import '../../domain/student_attendance.dart';
 import '../../domain/student_attendance_repository.dart';
 import '../controllers/student_attendance_controller.dart';
@@ -119,6 +121,7 @@ class _Summary extends StatelessWidget {
       ('Late', summary.late, Icons.schedule_outlined),
       ('Absent', summary.absent, Icons.cancel_outlined),
       ('Records', summary.total, Icons.list_alt_outlined),
+      if (summary.halfDay > 0) ('Half-day', summary.halfDay, Icons.timelapse),
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -169,18 +172,20 @@ class _Summary extends StatelessWidget {
                               color: Theme.of(context).colorScheme.primary,
                             ),
                             const SizedBox(width: 10),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '${value.$2}',
-                                  style: const TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w900,
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${value.$2}',
+                                    style: const TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w900,
+                                    ),
                                   ),
-                                ),
-                                Text(value.$1),
-                              ],
+                                  Text(value.$1),
+                                ],
+                              ),
                             ),
                           ],
                         ),
@@ -203,17 +208,23 @@ class _AttendanceTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final status = record.sessions.dayStatus(record.status);
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: CircleAvatar(child: Icon(_statusIcon(record.status))),
+        leading: CircleAvatar(child: Icon(_statusIcon(status))),
         title: Text(
           _displayDate(record.date),
           style: const TextStyle(fontWeight: FontWeight.w700),
         ),
-        subtitle: Text(_timeLine(record)),
-        trailing: _StatusBadge(status: record.status),
+        subtitle: Text(
+          [
+            _timeLine(record),
+            if (record.sessions.hasDetails) record.sessions.description,
+          ].join('\n'),
+        ),
+        trailing: _StatusBadge(status: status),
       ),
     );
   }
@@ -231,6 +242,7 @@ class _StatusBadge extends StatelessWidget {
       'late' => Colors.orange,
       'absent' => Colors.red,
       'excused' => Colors.blue,
+      'half_day' => Colors.deepOrange,
       _ => Colors.grey,
     };
     return Container(
@@ -240,7 +252,7 @@ class _StatusBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        _sentenceCase(status),
+        attendanceStatusLabel(status),
         style: TextStyle(color: color.shade700, fontWeight: FontWeight.w700),
       ),
     );
@@ -302,6 +314,7 @@ IconData _statusIcon(String status) => switch (status) {
   'late' => Icons.schedule,
   'absent' => Icons.close,
   'excused' => Icons.description_outlined,
+  'half_day' => Icons.timelapse,
   _ => Icons.help_outline,
 };
 
@@ -319,10 +332,6 @@ String? _shortTime(String? value) {
   final parts = value.split(':');
   return parts.length >= 2 ? '${parts[0]}:${parts[1]}' : value;
 }
-
-String _sentenceCase(String value) => value.isEmpty
-    ? 'Unknown'
-    : '${value[0].toUpperCase()}${value.substring(1).replaceAll('_', ' ')}';
 
 String _displayDate(String value) {
   final date = DateTime.tryParse(value);

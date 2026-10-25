@@ -8,6 +8,7 @@ import '../../../../shared/presentation/animated_tab_stack.dart';
 import '../../../auth/domain/auth_user.dart';
 import '../../../notifications/domain/notification_repository.dart';
 import '../../../notifications/presentation/pages/notifications_page.dart';
+import '../../../notifications/presentation/widgets/notification_badge.dart';
 import '../../domain/parent_child.dart';
 import '../../domain/parent_enrollment_repository.dart';
 import '../../domain/parent_repository.dart';
@@ -99,7 +100,7 @@ class _ParentHomePageState extends State<ParentHomePage> {
                 height: 82,
                 selectedIndex: _selectedTab,
                 onDestinationSelected: _selectTab,
-                destinations: const [
+                destinations: [
                   NavigationDestination(
                     icon: Icon(Icons.home_outlined),
                     selectedIcon: Icon(Icons.home_rounded),
@@ -116,8 +117,16 @@ class _ParentHomePageState extends State<ParentHomePage> {
                     label: 'Absences',
                   ),
                   NavigationDestination(
-                    icon: Icon(Icons.notifications_outlined),
-                    selectedIcon: Icon(Icons.notifications_rounded),
+                    icon: NotificationBadge(
+                      repository: widget.notificationRepository,
+                      accessToken: widget.accessToken,
+                      childId: _controller.selectedChild?.id,
+                      child: Icon(
+                        _selectedTab == 3
+                            ? Icons.notifications_rounded
+                            : Icons.notifications_outlined,
+                      ),
+                    ),
                     label: 'Alerts',
                   ),
                 ],
@@ -133,6 +142,23 @@ class _ParentHomePageState extends State<ParentHomePage> {
     onChildSelected: (child) => unawaited(_selectChild(child)),
     onAddChild: () => unawaited(_openEnrollment()),
     onLogout: widget.onLogout,
+    notificationAction: IconButton(
+      tooltip: 'Notifications',
+      onPressed: () => Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => NotificationsPage(
+            accessToken: widget.accessToken,
+            repository: widget.notificationRepository,
+            parentStyle: true,
+          ),
+        ),
+      ),
+      icon: NotificationBadge(
+        repository: widget.notificationRepository,
+        accessToken: widget.accessToken,
+        child: const Icon(Icons.notifications_outlined),
+      ),
+    ),
     onProfile: () => Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => ParentProfilePage(

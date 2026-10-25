@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../shared/domain/attendance_sessions.dart';
 import '../../domain/parent_attendance.dart';
 import '../../domain/parent_child.dart';
 import '../../domain/parent_repository.dart';
@@ -239,10 +240,12 @@ class _SummaryCard extends StatelessWidget {
         children: [
           const ParentSectionLabel('Recorded attendance'),
           const SizedBox(height: 14),
-          Row(
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               _RateRing(value: summary.presentPercentage),
-              const SizedBox(width: 12),
               const SizedBox(
                 width: 82,
                 child: Text(
@@ -257,15 +260,16 @@ class _SummaryCard extends StatelessWidget {
                 ),
               ),
               _SummaryNumber(label: 'Present', value: summary.present),
-              Container(
-                height: 58,
-                width: 1,
-                margin: const EdgeInsets.symmetric(horizontal: 8),
-                color: ParentDesign.line,
-              ),
               _SummaryNumber(label: 'Absent', value: summary.absent),
             ],
           ),
+          if (summary.halfDay > 0) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Half-day: ${summary.halfDay}',
+              style: const TextStyle(color: ParentDesign.deepInk),
+            ),
+          ],
         ],
       ),
     );
@@ -366,7 +370,8 @@ class _AttendanceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _statusColor(record.status);
+    final status = record.sessions.dayStatus(record.status);
+    final color = _statusColor(status);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       child: Row(
@@ -378,7 +383,7 @@ class _AttendanceRow extends StatelessWidget {
               color: color.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
-            child: Icon(_statusIcon(record.status), color: color, size: 23),
+            child: Icon(_statusIcon(status), color: color, size: 23),
           ),
           const SizedBox(width: 13),
           Expanded(
@@ -398,11 +403,19 @@ class _AttendanceRow extends StatelessWidget {
                   _details(record.timeIn, record.timeOut, record.remarks),
                   style: const TextStyle(color: AppColors.muted, fontSize: 13),
                 ),
+                if (record.sessions.hasDetails)
+                  Text(
+                    record.sessions.description,
+                    style: const TextStyle(
+                      color: AppColors.muted,
+                      fontSize: 13,
+                    ),
+                  ),
               ],
             ),
           ),
           const SizedBox(width: 8),
-          _StatusChip(status: record.status),
+          _StatusChip(status: status),
         ],
       ),
     );
@@ -425,7 +438,7 @@ class _StatusChip extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
         child: Text(
-          _sentenceCase(status),
+          attendanceStatusLabel(status),
           style: TextStyle(
             color: color,
             fontSize: 11,
@@ -442,6 +455,7 @@ Color _statusColor(String status) => switch (status.toLowerCase()) {
   'late' => const Color(0xFFF59E0B),
   'absent' => AppColors.danger,
   'excused' => AppColors.blue,
+  'half_day' => Colors.deepOrange,
   _ => AppColors.muted,
 };
 
@@ -450,6 +464,7 @@ IconData _statusIcon(String status) => switch (status.toLowerCase()) {
   'late' => Icons.schedule_rounded,
   'absent' => Icons.event_busy_rounded,
   'excused' => Icons.description_outlined,
+  'half_day' => Icons.timelapse,
   _ => Icons.help_outline_rounded,
 };
 
@@ -463,10 +478,6 @@ String _details(String? timeIn, String? timeOut, String? remarks) {
 }
 
 String _shortTime(String value) => value.split(':').take(2).join(':');
-
-String _sentenceCase(String value) => value.isEmpty
-    ? 'Unknown'
-    : '${value[0].toUpperCase()}${value.substring(1).replaceAll('_', ' ')}';
 
 String _formatDate(String value) {
   final date = DateTime.tryParse(value);

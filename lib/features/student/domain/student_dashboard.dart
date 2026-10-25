@@ -1,3 +1,5 @@
+import '../../../shared/domain/attendance_sessions.dart';
+
 class StudentDashboard {
   const StudentDashboard({
     required this.month,
@@ -29,12 +31,14 @@ class StudentDashboard {
     Map<String, dynamic>? todayRecord;
     var late = 0;
     var excused = 0;
+    var halfDay = 0;
     if (history is List) {
       for (final item in history) {
         if (item is Map<String, dynamic>) {
           final status = '${item['status'] ?? ''}'.toLowerCase();
           if (status == 'late') late++;
           if (status == 'excused') excused++;
+          if (status == 'half_day') halfDay++;
           if ('${item['date'] ?? ''}'.split('T').first == _todayDate()) {
             todayRecord = item;
           }
@@ -47,13 +51,14 @@ class StudentDashboard {
       timezone: 'Asia/Manila',
       summaryComplete: false,
       totals: AttendanceTotals(
-        expectedDays: present + late + absent + excused,
+        expectedDays: present + late + absent + excused + halfDay,
         present: present,
         late: late,
-        attended: present + late,
+        attended: present + late + halfDay,
         absent: absent,
         excused: excused,
         pending: 0,
+        halfDay: halfDay,
       ),
       today: TodayAttendance(
         date: _todayDate(),
@@ -61,6 +66,7 @@ class StudentDashboard {
         attendanceId: (todayRecord?['id'] as num?)?.toInt(),
         timeIn: todayRecord?['time_in'] as String?,
         timeOut: todayRecord?['time_out'] as String?,
+        sessions: AttendanceSessions.fromJson(todayRecord ?? const {}),
       ),
       unreadNotifications: 0,
     );
@@ -83,6 +89,7 @@ class AttendanceTotals {
     required this.absent,
     required this.excused,
     required this.pending,
+    this.halfDay = 0,
   });
 
   factory AttendanceTotals.fromJson(Map<String, dynamic> json) {
@@ -96,6 +103,7 @@ class AttendanceTotals {
       absent: value('absent'),
       excused: value('excused'),
       pending: value('pending'),
+      halfDay: value('half_day'),
     );
   }
 
@@ -106,6 +114,7 @@ class AttendanceTotals {
   final int absent;
   final int excused;
   final int pending;
+  final int halfDay;
 }
 
 class TodayAttendance {
@@ -115,6 +124,7 @@ class TodayAttendance {
     this.attendanceId,
     this.timeIn,
     this.timeOut,
+    this.sessions = const AttendanceSessions(),
   });
 
   factory TodayAttendance.fromJson(Map<String, dynamic> json) {
@@ -124,6 +134,7 @@ class TodayAttendance {
       attendanceId: (json['attendance_id'] as num?)?.toInt(),
       timeIn: json['time_in'] as String?,
       timeOut: json['time_out'] as String?,
+      sessions: AttendanceSessions.fromJson(json),
     );
   }
 
@@ -132,6 +143,7 @@ class TodayAttendance {
   final int? attendanceId;
   final String? timeIn;
   final String? timeOut;
+  final AttendanceSessions sessions;
 }
 
 Map<String, dynamic> _map(Object? value) {

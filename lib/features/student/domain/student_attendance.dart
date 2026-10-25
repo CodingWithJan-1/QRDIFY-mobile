@@ -1,3 +1,5 @@
+import '../../../shared/domain/attendance_sessions.dart';
+
 class StudentAttendanceResult {
   const StudentAttendanceResult({
     required this.summary,
@@ -48,6 +50,7 @@ class AttendanceRecordSummary {
     required this.absent,
     required this.late,
     required this.presentPercentage,
+    this.halfDay = 0,
   });
 
   factory AttendanceRecordSummary.fromJson(Map<String, dynamic> json) {
@@ -57,6 +60,7 @@ class AttendanceRecordSummary {
       absent: _integer(json['absent']),
       late: _integer(json['late']),
       presentPercentage: _decimal(json['present_percentage']),
+      halfDay: _integer(json['half_day']),
     );
   }
 
@@ -65,6 +69,7 @@ class AttendanceRecordSummary {
   final int absent;
   final int late;
   final double presentPercentage;
+  final int halfDay;
 }
 
 class StudentAttendanceRecord {
@@ -75,6 +80,7 @@ class StudentAttendanceRecord {
     this.timeIn,
     this.timeOut,
     this.remarks,
+    this.sessions = const AttendanceSessions(),
   });
 
   factory StudentAttendanceRecord.fromJson(Map<String, dynamic> json) {
@@ -85,6 +91,7 @@ class StudentAttendanceRecord {
       timeIn: _optionalText(json['time_in']),
       timeOut: _optionalText(json['time_out']),
       remarks: _optionalText(json['remarks']),
+      sessions: AttendanceSessions.fromJson(json),
     );
   }
 
@@ -94,6 +101,7 @@ class StudentAttendanceRecord {
   final String? timeIn;
   final String? timeOut;
   final String? remarks;
+  final AttendanceSessions sessions;
 }
 
 Map<String, dynamic> _map(Object? value) =>

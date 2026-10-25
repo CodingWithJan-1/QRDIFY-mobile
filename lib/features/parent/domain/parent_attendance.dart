@@ -1,3 +1,5 @@
+import '../../../shared/domain/attendance_sessions.dart';
+
 class ParentAttendanceResult {
   const ParentAttendanceResult({
     required this.records,
@@ -35,6 +37,7 @@ class ParentAttendanceSummary {
     required this.absent,
     required this.late,
     required this.presentPercentage,
+    this.halfDay = 0,
   });
 
   factory ParentAttendanceSummary.fromJson(Map<String, dynamic> json) {
@@ -44,6 +47,7 @@ class ParentAttendanceSummary {
       absent: (json['absent'] as num?)?.toInt() ?? 0,
       late: (json['late'] as num?)?.toInt() ?? 0,
       presentPercentage: (json['present_percentage'] as num?)?.toDouble() ?? 0,
+      halfDay: (json['half_day'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -52,6 +56,7 @@ class ParentAttendanceSummary {
   final int absent;
   final int late;
   final double presentPercentage;
+  final int halfDay;
 }
 
 class ParentAttendanceRecord {
@@ -62,6 +67,7 @@ class ParentAttendanceRecord {
     this.timeIn,
     this.timeOut,
     this.remarks,
+    this.sessions = const AttendanceSessions(),
   });
 
   factory ParentAttendanceRecord.fromJson(Map<String, dynamic> json) {
@@ -72,6 +78,7 @@ class ParentAttendanceRecord {
       timeIn: _text(json['time_in']),
       timeOut: _text(json['time_out']),
       remarks: _text(json['remarks']),
+      sessions: AttendanceSessions.fromJson(json),
     );
   }
 
@@ -81,6 +88,7 @@ class ParentAttendanceRecord {
   final String? timeIn;
   final String? timeOut;
   final String? remarks;
+  final AttendanceSessions sessions;
 }
 
 Map<String, dynamic> _map(Object? value) =>

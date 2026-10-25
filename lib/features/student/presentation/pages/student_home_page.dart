@@ -5,11 +5,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../shared/domain/attendance_sessions.dart';
 import '../../../../shared/presentation/animated_tab_stack.dart';
 import '../../../../shared/presentation/module_home_scaffold.dart';
 import '../../../auth/domain/auth_user.dart';
 import '../../../notifications/domain/notification_repository.dart';
 import '../../../notifications/presentation/pages/notifications_page.dart';
+import '../../../notifications/presentation/widgets/notification_badge.dart';
 import '../../domain/device_location_service.dart';
 import '../../domain/excuse_letter_repository.dart';
 import '../../domain/student_attendance_repository.dart';
@@ -123,7 +125,7 @@ class _StudentHomePageState extends State<StudentHomePage>
         bottomNavigationBar: NavigationBar(
           selectedIndex: _selectedTab,
           onDestinationSelected: _selectTab,
-          destinations: const [
+          destinations: [
             NavigationDestination(
               icon: Icon(Icons.home_outlined),
               selectedIcon: Icon(Icons.home_rounded),
@@ -145,8 +147,15 @@ class _StudentHomePageState extends State<StudentHomePage>
               label: 'Excuses',
             ),
             NavigationDestination(
-              icon: Icon(Icons.notifications_outlined),
-              selectedIcon: Icon(Icons.notifications_rounded),
+              icon: NotificationBadge(
+                repository: widget.notificationRepository,
+                accessToken: widget.accessToken,
+                child: Icon(
+                  _selectedTab == 4
+                      ? Icons.notifications_rounded
+                      : Icons.notifications_outlined,
+                ),
+              ),
               label: 'Alerts',
             ),
           ],
@@ -290,11 +299,13 @@ class _TodayCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final status = _sentenceCase(attendance.status);
-    final statusColor = switch (attendance.status.toLowerCase()) {
+    final dayStatus = attendance.sessions.dayStatus(attendance.status);
+    final status = attendanceStatusLabel(dayStatus);
+    final statusColor = switch (dayStatus) {
       'present' || 'early' => const Color(0xFF10B981),
       'late' => const Color(0xFFF59E0B),
       'absent' => AppColors.danger,
+      'half_day' => Colors.deepOrange,
       _ => const Color(0xFF94A3B8),
     };
 
@@ -338,6 +349,13 @@ class _TodayCard extends StatelessWidget {
                           fontWeight: FontWeight.w800,
                         ),
                       ),
+                      if (attendance.sessions.hasDetails) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          attendance.sessions.description,
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ],
                       if (attendance.timeIn != null) ...[
                         const SizedBox(height: 4),
                         Text(
@@ -399,6 +417,8 @@ class _TotalsGrid extends StatelessWidget {
         AppColors.danger,
       ),
       ('Late', totals.late, Icons.schedule_outlined, const Color(0xFFF59E0B)),
+      if (totals.halfDay > 0)
+        ('Half-day', totals.halfDay, Icons.timelapse, Colors.deepOrange),
       (
         'Excused',
         totals.excused,
@@ -514,11 +534,6 @@ class _IncompleteSummaryNotice extends StatelessWidget {
       ),
     );
   }
-}
-
-String _sentenceCase(String value) {
-  if (value.isEmpty) return 'Unknown';
-  return '${value[0].toUpperCase()}${value.substring(1).replaceAll('_', ' ')}';
 }
 
 String _shortTime(String value) {

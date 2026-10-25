@@ -8,6 +8,8 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.os.Build
 import io.flutter.plugin.common.MethodChannel
 
@@ -17,7 +19,15 @@ class AlertNotifications(private val activity: Activity, private val channel: Me
 
     init {
         if (Build.VERSION.SDK_INT >= 26) {
-            manager.createNotificationChannel(NotificationChannel("qrdify_alerts", "School alerts", NotificationManager.IMPORTANCE_HIGH))
+            val alerts = NotificationChannel("qrdify_alerts", "School alerts", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Attendance and school updates"
+                setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
+                    AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+                enableVibration(true)
+                setShowBadge(true)
+            }
+            manager.createNotificationChannel(alerts)
         }
         capture(activity.intent, false)
         channel.setMethodCallHandler { call, result ->
@@ -61,6 +71,7 @@ class AlertNotifications(private val activity: Activity, private val channel: Me
         val notification = builder.setSmallIcon(R.drawable.ic_stat_qrdify)
             .setContentTitle("QRDify school update").setContentText("A new alert is available. Open QRDify to view it.")
             .setContentIntent(open).setAutoCancel(true).setOnlyAlertOnce(true)
+            .setCategory(Notification.CATEGORY_EVENT)
             .setVisibility(Notification.VISIBILITY_PRIVATE).setPriority(Notification.PRIORITY_HIGH)
             .setDefaults(Notification.DEFAULT_SOUND or Notification.DEFAULT_VIBRATE).build()
         manager.notify(id, 0, notification)

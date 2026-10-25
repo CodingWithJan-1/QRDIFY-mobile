@@ -1,3 +1,5 @@
+import '../../../shared/domain/attendance_sessions.dart';
+
 class ParentChildDashboard {
   const ParentChildDashboard({
     required this.month,
@@ -10,6 +12,8 @@ class ParentChildDashboard {
     required this.todayStatus,
     required this.todayTimeIn,
     this.todayTimeOut,
+    this.todaySessions = const AttendanceSessions(),
+    this.halfDay = 0,
   });
 
   factory ParentChildDashboard.fromJson(Map<String, dynamic> json) {
@@ -28,6 +32,8 @@ class ParentChildDashboard {
       todayStatus: '${today['status'] ?? 'pending'}'.toLowerCase(),
       todayTimeIn: _text(today['time_in']),
       todayTimeOut: _text(today['time_out']),
+      todaySessions: AttendanceSessions.fromJson(today),
+      halfDay: count('half_day'),
     );
   }
 
@@ -41,6 +47,8 @@ class ParentChildDashboard {
   final String todayStatus;
   final String? todayTimeIn;
   final String? todayTimeOut;
+  final AttendanceSessions todaySessions;
+  final int halfDay;
 }
 
 Map<String, dynamic> _map(Object? value) =>
